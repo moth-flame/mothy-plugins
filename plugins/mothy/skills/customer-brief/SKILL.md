@@ -34,7 +34,7 @@ Call the `brief_start` action through `mcp__mothy__mothy`:
 mcp__mothy__mothy({ action: "brief_start", params: { customer: "<account>", person: "<contact name, optional>" } })
 ```
 
-- `customer` — the account name the user named (e.g. "ACC", "Warner Robins").
+- `customer` — the account name the user named (e.g. "ACC", "Acme Division").
 - `person` — optional; the specific contact they're meeting. Pass it when the
   user mentioned a name ("call with Colonel Smith").
 

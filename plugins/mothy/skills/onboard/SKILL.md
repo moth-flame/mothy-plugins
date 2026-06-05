@@ -45,7 +45,7 @@ build → ship something this week. No admin privileges required.
 
 ### Trigger
 
-An admin DMs Mothy: `onboard @aaron`, `onboard aaron@mothandflamevr.com`,
+An admin DMs Mothy: `onboard @teammate`, `onboard teammate@mothandflamevr.com`,
 `start vibe onboarding for Aaron`, `onboard Aaron`, or bare `onboard`.
 
 **Admin self-onboarding is not supported.** If the resolved target email is

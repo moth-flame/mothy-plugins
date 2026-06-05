@@ -230,12 +230,12 @@ After presenting the file, walk the team member through using NotebookLM. They m
 For internal calibration only — do not show this to the team member unless they ask. The first successful use of this playbook produced an 8-slide deck for an ACC A4 meeting with this structure:
 
 1. Cover
-2. Who We Are (Credentials + light-touch F-15/Warner Robins foothold)
+2. Who We Are (Credentials + light-touch relevant foothold)
 3. Discovery (4 open prompts visible during listening)
 4. Strategic Frame (Meink quote from DAF AI Strategy + 3 of 5 mission areas)
 5. The Platform (CommandIQ + MRO, four connected modes, "Completion ≠ readiness" thesis)
 6. Applied Across the A4 Mission (four-quadrant: maintenance, logistics, engineering, force protection)
-7. The Data Layer (Tesla analogy + Warner Robins case study stats)
+7. The Data Layer (analogy + relevant case study stats)
 8. Next Steps
 
 Strategic choices that drove the outline:
