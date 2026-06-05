@@ -1,0 +1,14 @@
+{
+  "name": "mothy-marketplace",
+  "owner": {
+    "name": "Moth+Flame",
+    "email": "rich@mothandflamevr.com"
+  },
+  "plugins": [
+    {
+      "name": "mothy",
+      "source": "./plugins/mothy",
+      "description": "Moth+Flame team agent: customer briefs, capability decks, intel, Google Workspace edits, onboarding."
+    }
+  ]
+}

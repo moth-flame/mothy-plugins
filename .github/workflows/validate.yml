@@ -1,0 +1,28 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run manifest tests
+        run: node --test tests/
+
+      - name: Validate plugin with Claude CLI (if available)
+        run: |
+          if command -v claude >/dev/null 2>&1 && claude plugin --help >/dev/null 2>&1; then
+            echo "claude CLI present — running strict plugin validation"
+            claude plugin validate ./plugins/mothy --strict
+          else
+            echo "claude CLI not available — skipping strict plugin validation (manifest tests cover structure)"
+          fi

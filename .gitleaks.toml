@@ -1,0 +1,52 @@
+# gitleaks config for mothy-plugins.
+#
+# This repo is a Claude Code plugin marketplace. It MUST stay credential-free:
+# the MCP connection authenticates via OAuth at connect time, so no token,
+# service-account key, or bearer string should ever land in git.
+#
+# Run locally: gitleaks detect --config .gitleaks.toml --no-banner
+
+title = "mothy-plugins secret scan"
+
+[extend]
+# Start from gitleaks' built-in ruleset, then add repo-specific deny rules.
+useDefault = true
+
+[[rules]]
+id = "mothy-oct-token"
+description = "Mothy per-user OAuth token (oct_...)"
+regex = '''oct_[a-z0-9_]+'''
+tags = ["mothy", "token"]
+
+[[rules]]
+id = "mothy-token-env"
+description = "MOTHY_TOKEN assignment"
+regex = '''MOTHY_TOKEN\s*=\s*\S+'''
+tags = ["mothy", "env"]
+
+[[rules]]
+id = "google-service-account-key"
+description = "Google service-account key var"
+regex = '''GOOGLE_SERVICE_ACCOUNT_KEY\s*[:=]\s*\S+'''
+tags = ["google", "service-account"]
+
+[[rules]]
+id = "bearer-token-literal"
+description = "Literal Bearer token"
+regex = '''Bearer\s+[A-Za-z0-9._\-]{8,}'''
+tags = ["auth", "bearer"]
+
+[allowlist]
+description = "Docs/tests may mention the patterns abstractly without real secrets"
+# Allow placeholder/example forms that are clearly not live secrets.
+regexes = [
+  '''oct_<''',
+  '''oct_hex''',
+  '''Bearer <token>''',
+  '''Bearer x"''',
+  '''Bearer realm''',
+]
+paths = [
+  '''\.gitleaks\.toml$''',
+  '''tests/.*\.test\.mjs$''',
+]
