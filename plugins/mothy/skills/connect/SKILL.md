@@ -49,9 +49,14 @@ The page comes back with a connector URL (it starts with
 6. Click **Add / Connect**
 → Wait for them to confirm it's added.
 
-**Step 3 — Allow the tools.**
-The first time Mothy runs something, Claude asks permission. Choose
-**Always allow** for the Mothy tools so it doesn't ask every time.
+**Step 3 — Set Mothy to "Always allow" (important — do this now).**
+Right after you click Connect, you land on Mothy's connector page. Under
+**Tool permissions**, open the dropdown in the top-right (it defaults to "Ask")
+and choose **Always allow**. That lets all the Mothy tools (`mothy`,
+`mothy_help`, `brief_start`, `deck_start`) run without stopping to ask you to
+approve every single action. Without this, Mothy will pause for permission
+constantly. (You can change it back anytime from the same page.)
+→ Confirm they've set it to **Always allow**.
 
 **Step 4 — Test it.**
 Have them say: **"use mothy, run whoami"** — it should return their email.

@@ -33,6 +33,9 @@ because skills load on install.)
      (`@mothandflamevr.com`) → **Copy** the URL.
   2. **Customize → Connectors → `+` → Add custom connector** → paste → name it
      `Mothy` → **Connect**.
+  3. On Mothy's connector page, under **Tool permissions**, set the dropdown
+     (top-right) to **Always allow** — so the Mothy tools run without prompting
+     on every action.
 - **Terminal Claude Code CLI:** `/mcp` → `mothy` → **Authenticate** (browser
   OAuth — works because the loopback is local to the CLI).
 
