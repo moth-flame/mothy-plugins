@@ -1,57 +1,74 @@
 # Mothy
 
-The **Moth+Flame team agent** for Claude Code and Cowork. Mothy gives your
-Claude session direct, authenticated access to Moth+Flame's tooling:
-customer briefs, capability decks, cross-source intel, in-place Google
-Workspace edits, and teammate onboarding.
+The **Moth+Flame team agent** for Claude Code and Cowork. This plugin ships
+Mothy's **skills + slash commands** — customer briefs, capability decks,
+in-place Google Workspace edits, and teammate onboarding. The skills call the
+Mothy MCP tools, which you connect once (see below).
 
-## Install
-
-Add the marketplace and install:
+## Install (skills + commands)
 
 ```
 /plugin marketplace add moth-flame/mothy-plugins
 /plugin install mothy@mothy-marketplace
 ```
 
-### Sign in on install
+This installs **skills + commands only — no connector.**
 
-When the plugin connects, you'll be sent through a Google OAuth sign-in.
-**Use your `@mothandflamevr.com` account** — Mothy identifies you and scopes
-what you can see by that sign-in. Non–Moth+Flame accounts are rejected.
+## Connect Mothy (one-time — required for the tools)
 
-There's nothing to paste, no token to copy, no config to edit. The plugin
-ships a remote MCP connection (`https://mothy-mcp.vercel.app/mcp`) and the
-sign-in happens in the browser.
+**Easiest: just ask Mothy to walk you through it.** As soon as the plugin is
+installed, say:
 
-> **Fallback (cloud / headless CC):** environments that can't run the
-> interactive browser OAuth flow can connect with a per-user token URL
-> (`https://mothy-mcp.vercel.app/mcp?token=oct_…`) instead. Ask Rich to mint
-> one. This is only for headless/cloud sessions — normal desktop installs
-> use the browser sign-in above.
+> **"walk me through getting set up"**  (or run **`/connect`**)
+
+Mothy runs its **connect** skill and guides you step-by-step — including the
+exact link to generate your connector URL. No need for anyone to walk you
+through it manually. (The connect skill works *before* the connector exists,
+because skills load on install.)
+
+### The steps it walks you through (reference)
+
+- **Desktop app (Chat / Cowork / Code):** add a **custom connector**:
+  1. **https://mothy-mcp.vercel.app/connect** → Sign in with Google
+     (`@mothandflamevr.com`) → **Copy** the URL.
+  2. **Customize → Connectors → `+` → Add custom connector** → paste → name it
+     `Mothy` → **Connect**.
+- **Terminal Claude Code CLI:** `/mcp` → `mothy` → **Authenticate** (browser
+  OAuth — works because the loopback is local to the CLI).
+
+Test: *"use mothy, run whoami"* → returns your email.
+
+Not in the registry yet? The connect skill will tell you to message **Rich or
+Chris** to get added.
+
+> **Why isn't the connector bundled in the plugin?** The Claude desktop app
+> can't authenticate a plugin-bundled OAuth MCP connector (no Authenticate
+> button in the Chat/Cowork/Code connector GUI), so bundling one only created a
+> dead placeholder + a duplicate. Connecting separately (above) is the working
+> path on every surface. Browser-OAuth on plugin install only completes in the
+> terminal CLI today.
 
 ## Capabilities
 
-Mothy exposes its actions through two stable MCP tools. **These are the
-entry points — start here:**
+Mothy exposes its actions through two stable MCP tools (available once the
+connector is connected):
 
 - **`mothy`** — execute any team action by name: `{action, params}`.
-- **`mothy_help`** — list every available action, live. Call this to
-  discover what Mothy can do right now (Sheets, Docs, Slides, Gmail,
-  Calendar, Drive, intel search, account briefs, admin/onboarding, and
-  more — roughly 65 actions and growing).
+- **`mothy_help`** — list every available action, live (Sheets, Docs, Slides,
+  Gmail, Calendar, Drive, intel search, account briefs, admin/onboarding, and
+  more — ~65 actions and growing).
 
-The action set is intentionally **not hand-listed here** — it changes
-often, and `mothy_help` is always current. Ask Mothy "what can you do?" or
-call `mothy_help` to see the live catalog.
+The action set is intentionally **not hand-listed here** — it changes often;
+`mothy_help` is always current. Ask Mothy "what can you do?" to see it live.
 
-### v1 Skills
+## Skills (this plugin)
 
-The plugin ships four skills that Claude invokes proactively when your
-request matches — you don't have to name them:
+Claude invokes these proactively when your request matches — you don't have to
+name them:
 
 | Skill | Use it for | Triggers |
 |-------|-----------|----------|
+| **connect** | First-time setup — walks you through connecting the Mothy connector (works before the connector exists) | "walk me through getting set up", "connect mothy", "/connect" |
 | **deck** | Building a customer-facing capability / pitch deck | "make a deck", "prep for a customer meeting", "draft a pitch for <prospect>", "/deck" |
 | **customer-brief** | A one-pager / context load on a Moth+Flame account | "brief me on <customer>", "I have a call with <customer>", "what do we know about <account>" |
 | **edit-in-place** | Editing existing Google Docs / Sheets / Slides surgically (in place, comments preserved) | "update this doc", "fix the numbers in that sheet", "tweak the speaker notes" |
@@ -59,19 +76,16 @@ request matches — you don't have to name them:
 
 ## Support matrix
 
-Where each surface of the plugin works today:
-
-| Surface | Claude Code | Cowork |
-|---------|-------------|--------|
+| Component | Claude Code | Cowork |
+|-----------|-------------|--------|
 | Skills (deck, customer-brief, edit-in-place, onboard) | ✅ | ✅ |
-| Remote MCP (`mothy` / `mothy_help`) | ✅ | ✅ |
-| Slash commands | ✅ confirmed | ⏳ TBD |
-| Hooks | ✅ Code-only | — |
-| Agents | ✅ Code-only | — |
+| Slash commands (`/deck`, `/brief`, `/onboard`) | ✅ confirmed | ⏳ verify per build |
+| Mothy MCP tools (via the separately-added connector) | ✅ | ✅ |
+| Plugin-bundled connector OAuth | n/a (skills-only) | n/a (skills-only) |
 
 ## Notes
 
-- This plugin is **private / org-only** for Moth+Flame.
-- All data access is gated on your `@mothandflamevr.com` Google sign-in.
+- Private / org-only for Moth+Flame. Data access is gated on your
+  `@mothandflamevr.com` identity (the token from `/connect`).
 - Don't surface "Mothy MCP" in customer-facing output — use it silently and
   present results as plain findings.
