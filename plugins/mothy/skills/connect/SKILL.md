@@ -19,43 +19,38 @@ description: >-
 # Connect Mothy (first-time setup)
 
 You're helping a Moth+Flame teammate finish setting up Mothy. The plugin they
-installed ships the **skills**; the **tools** come from a one-time connector
-setup. Walk them through it **conversationally, one step at a time, plain
-language**. Assume they are NOT technical. Wait for them to say "done" (or paste
-a result) before moving to the next step. Never dump all steps at once unless
-they ask.
+installed ships the **skills**; the **tools** come from connecting the Mothy
+connector once. Mothy is an **org connector** — it's already in everyone's
+connector list in the Claude Desktop app. **There is no token to mint and
+nothing to paste** — it's two clicks plus a Google sign-in.
+
+Walk them through it **conversationally, one step at a time, plain language**.
+Assume they are NOT technical. Wait for them to say "done" before moving to the
+next step. Never dump all steps at once unless they ask.
 
 Open with one friendly line, e.g.: *"Welcome! Mothy's skills are installed — we
 just need to connect it once so the tools work. Takes about a minute. Ready?"*
 
 ## The steps
 
-**Step 1 — Get your personal Mothy link.**
-Open this in your browser:
-
-  **https://mothy-mcp.vercel.app/connect**
-
-Click **Sign in with Google** and choose your **@mothandflamevr.com** account.
-The page comes back with a connector URL (it starts with
-`https://mothy-mcp.vercel.app/mcp?token=…`). Click **Copy**.
-→ Wait for them to confirm they've copied it.
-
-**Step 2 — Add it as a connector in Claude.**
+**Step 1 — Open the connector list.**
+In the **Claude Desktop app** (the actual app, not a browser tab):
 1. Top-left → **Customize**
 2. Left sidebar → **Connectors**
-3. Click the **+** → **Add custom connector**
-4. **Name:** `Mothy`
-5. **URL:** paste the link you copied
-6. Click **Add / Connect**
-→ Wait for them to confirm it's added.
+→ Wait for them to confirm they're looking at the connector list.
+
+**Step 2 — Connect Mothy.**
+1. Find **Mothy** in the list (it shows `https://mothy-mcp.vercel.app/mcp`).
+2. Click **Connect**.
+3. **Sign in with Google** and choose your **@mothandflamevr.com** account.
+→ Wait for them to confirm they're connected.
 
 **Step 3 — Set Mothy to "Always allow" (important — do this now).**
-Right after you click Connect, you land on Mothy's connector page. Under
-**Tool permissions**, open the dropdown in the top-right (it defaults to "Ask")
-and choose **Always allow**. That lets all the Mothy tools (`mothy`,
-`mothy_help`, `brief_start`, `deck_start`) run without stopping to ask you to
-approve every single action. Without this, Mothy will pause for permission
-constantly. (You can change it back anytime from the same page.)
+Right after connecting, you're on Mothy's connector page. Under **Tool
+permissions**, open the dropdown that says **"Needs approval"** (top-right) and
+choose **✓ Always allow** — it flips all the Mothy tools at once. Without this,
+Mothy pauses to ask permission for every single action. (You can change it back
+anytime from the same page.)
 → Confirm they've set it to **Always allow**.
 
 **Step 4 — Test it.**
@@ -69,25 +64,28 @@ skills — Mothy picks them up from plain requests.
 
 ## If something goes wrong
 
-- **The /connect page says "you're almost there" / "not in the registry"** →
-  their email isn't enabled for Mothy yet. Tell them to **message Rich or
-  Chris** to get added, then come back and redo Step 1. Reassure them: nothing
-  is broken on their end.
+- **Mothy isn't in the connector list** → the org connector isn't provisioned
+  for them yet. Tell them to **message Rich or Chris** to get added, then come
+  back and redo Step 1. Reassure them: nothing is broken on their end.
+
+  *Only if Rich confirms the org connector isn't available to them:* the
+  fallback is a per-user token URL — have them open
+  **https://mothy-mcp.vercel.app/connect**, *Sign in with Google*, **Copy** the
+  URL it returns, then **Customize → Connectors → Add custom connector**, name
+  it `Mothy`, paste the URL, **Connect**. Use this ONLY when the org connector
+  isn't an option — the list-and-Connect path above is the supported one.
 - **"Wrong Google account"** → they're signed into a personal Gmail in that
-  browser. Use the **"sign out and try again"** link on the page, then pick the
+  browser. Sign out of Google, click **Connect** again, pick the
   **@mothandflamevr.com** account.
-- **Connector shows an error or won't connect** → re-copy a **fresh** URL from
-  `https://mothy-mcp.vercel.app/connect` (the link can be regenerated anytime)
-  and re-add it.
-- **They see an old greyed-out "mothy — not connected" connector** → that's a
-  leftover; they can ignore or remove it. The one they just added (named
-  `Mothy`, from the copied URL) is the live one.
+- **"You're almost there" / "not in the registry"** → their email isn't enabled
+  for Mothy yet. Tell them to **message Rich or Chris**, then redo Step 2.
+- **Still asking to approve every action** → the Always-allow step didn't take.
+  Re-open Mothy in Connectors and set it again.
 
 ## Do NOT
 
-- Don't have them paste a token into a JSON file or edit any config by hand —
-  the only step is paste-the-URL-into-the-connector.
+- Don't lead with the token URL or have them paste a token into a JSON file /
+  edit any config by hand. The supported path is **Connect Mothy from the
+  connector list** — the token URL is a fallback only, used when Rich confirms
+  the org connector isn't available.
 - Don't use "MCP" jargon — call it "the Mothy connector."
-- Don't tell them to use the browser "Authenticate on install" flow — that
-  OAuth path does not complete in the desktop app today; the custom-connector
-  steps above are the supported path.

@@ -96,25 +96,16 @@ test('plugin.json parses and has required fields', () => {
   );
 });
 
-test('.mcp.json points at the tokenless mothy HTTP endpoint', () => {
-  const mcp = readJson(join(pluginRoot, '.mcp.json'));
-  assert.ok(mcp.mcpServers, '.mcp.json must have mcpServers');
-  const server = mcp.mcpServers.mothy;
-  assert.ok(server, '.mcp.json must define a "mothy" server');
-  assert.equal(server.type, 'http', 'mothy server must be type http');
-  assert.equal(
-    server.url,
-    'https://mothy-mcp.vercel.app/mcp',
-    'mothy server url must be the canonical tokenless endpoint',
-  );
-  // Token is minted via OAuth on connect — it must NEVER be baked in.
+test('plugin is skills-only — bundles NO MCP connector (.mcp.json absent)', () => {
+  // The plugin ships SKILLS + COMMANDS only — it does NOT bundle an MCP
+  // connector. Mothy is an ORG connector: it's published to the team and shows
+  // up in everyone's Claude Desktop connector list, where the user clicks
+  // Connect → Google sign-in (no token, nothing to paste — see the `connect`
+  // skill). Bundling a .mcp.json would only create a dead, duplicate placeholder
+  // alongside the org connector. (Legacy token URL remains a fallback only.)
   assert.ok(
-    !server.url.includes('token='),
-    '.mcp.json url must not embed a token query param',
-  );
-  assert.ok(
-    !Object.prototype.hasOwnProperty.call(server, 'headers'),
-    '.mcp.json mothy server must not carry a headers block (no static auth)',
+    !existsSync(join(pluginRoot, '.mcp.json')),
+    'plugin must NOT bundle a .mcp.json connector (skills-only — see test comment)',
   );
 });
 

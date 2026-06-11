@@ -28,11 +28,12 @@ because skills load on install.)
 
 ### The steps it walks you through (reference)
 
-- **Desktop app (Chat / Cowork / Code):** add a **custom connector**:
-  1. **https://mothy-mcp.vercel.app/connect** → Sign in with Google
-     (`@mothandflamevr.com`) → **Copy** the URL.
-  2. **Customize → Connectors → `+` → Add custom connector** → paste → name it
-     `Mothy` → **Connect**.
+Mothy is an **org connector** — it's already in everyone's connector list. No
+token to mint, nothing to paste:
+
+- **Desktop app (Chat / Cowork / Code):**
+  1. **Customize → Connectors** → find **Mothy** → **Connect**.
+  2. **Sign in with Google** (`@mothandflamevr.com`).
   3. On Mothy's connector page, under **Tool permissions**, set the dropdown
      (top-right) to **Always allow** — so the Mothy tools run without prompting
      on every action.
@@ -41,15 +42,16 @@ because skills load on install.)
 
 Test: *"use mothy, run whoami"* → returns your email.
 
-Not in the registry yet? The connect skill will tell you to message **Rich or
-Chris** to get added.
+Not in the connector list / registry yet? The connect skill will tell you to
+message **Rich or Chris** to get added. *(Fallback only, if the org connector
+isn't available to you: generate a per-user URL at
+**https://mothy-mcp.vercel.app/connect** and add it as a custom connector.)*
 
-> **Why isn't the connector bundled in the plugin?** The Claude desktop app
-> can't authenticate a plugin-bundled OAuth MCP connector (no Authenticate
-> button in the Chat/Cowork/Code connector GUI), so bundling one only created a
-> dead placeholder + a duplicate. Connecting separately (above) is the working
-> path on every surface. Browser-OAuth on plugin install only completes in the
-> terminal CLI today.
+> **Why isn't the connector bundled in the plugin?** Mothy is published as an
+> **org connector** that appears in the connector list ready to Connect — the
+> plugin doesn't (and shouldn't) bundle its own MCP connector, which would only
+> create a dead duplicate. The plugin ships skills + commands; the org connector
+> is provisioned separately.
 
 ## Capabilities
 
