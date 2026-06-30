@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mothandflame.dev/schemas/video/vimeo-uploads.schema.json",
+  "title": "Vimeo upload artifact",
+  "description": "Upload record produced by a /video run. Must carry player_embed_url, which /article embeds at the top of the KB article.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion", "id", "link", "player_embed_url", "duration"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Vimeo numeric id as a string."
+    },
+    "link": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical vimeo.com watch URL."
+    },
+    "player_embed_url": {
+      "type": "string",
+      "minLength": 1,
+      "description": "player.vimeo.com embed URL. Required — the article embed depends on it."
+    },
+    "duration": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Video length in seconds."
+    }
+  }
+}

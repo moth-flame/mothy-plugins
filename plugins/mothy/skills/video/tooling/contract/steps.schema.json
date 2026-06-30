@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mothandflame.dev/schemas/video/steps.schema.json",
+  "title": "Video steps artifact",
+  "description": "Ordered, reader-parity step list produced by a /video run and consumed by /article. idx must be contiguous and 1-based; each step must carry both a screenshot file and a written instruction (no orphans).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "steps"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" }
+    }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["idx", "beat", "beatIdx", "action", "label", "file", "instruction"],
+      "properties": {
+        "idx": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based position; must be contiguous across the array (validated by validateSteps)."
+        },
+        "beat": { "type": "string", "minLength": 1 },
+        "beatIdx": { "type": "integer", "minimum": 1 },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Open string. Known set: click, type, reveal, nav. A novel action still validates so it can render generically."
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Per-step screenshot path. Required — its absence is an orphan."
+        },
+        "instruction": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Written step text. Required — its absence is an orphan."
+        }
+      }
+    }
+  }
+}

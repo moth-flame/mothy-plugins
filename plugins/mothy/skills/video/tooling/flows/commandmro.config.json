@@ -1,0 +1,138 @@
+{
+  "$schema": "./flow.config.schema.json",
+  "schemaVersion": 1,
+  "flowId": "commandmro",
+  "title": "CommandMRO — assessment to readiness, the personalized path back to ready",
+  "targetRuntimeSec": [225, 255],
+  "narration": {
+    "voiceName": "Rachel",
+    "voiceId": null,
+    "model": "eleven_multilingual_v2",
+    "style": "value-first / JTBD, plain-English; throughline 'assessment -> evidence -> readiness -> personalized path back to ready'; spoken full dimension and feature names, never acronyms; close on the personalized path"
+  },
+  "splash": {
+    "anchorSelector": "header [data-testid=\"mission-control-header\"]",
+    "loadingText": "Loading assessment frameworks…",
+    "maxTrimSec": 3.5
+  },
+  "app": {
+    "baseUrl": "https://dev-commandiq.mothandflamevr.com",
+    "auth": {
+      "strategy": "storageState",
+      "refresh": {
+        "strategy": "supabase-refresh-token"
+      }
+    },
+    "viewports": {
+      "portal": [1920, 1080],
+      "tablet": [390, 844]
+    }
+  },
+  "seed": {
+    "strategy": "targeted-update",
+    "scopeTag": "demo-commandmro",
+    "fixedEnrollmentCode": "BRAVO-MIKE-7",
+    "piiSafe": true,
+    "demoOrgAllowlist": ["Vanguard Defense Group", "Vanguard Sustainment"]
+  },
+  "beats": [
+    {
+      "id": "mission-control",
+      "title": "Mission Control",
+      "surface": "portal",
+      "voGist": "Open on the dark technical Mission Control: cohort readiness across six capability bars, who needs attention, and how many learner reviews are waiting.",
+      "waitFor": "header [data-testid=\"mission-control-header\"]",
+      "dependsOn": []
+    },
+    {
+      "id": "course-builder",
+      "title": "Course Builder + advancement rule",
+      "surface": "portal",
+      "voGist": "Open the block, then the module, then the assessment settings: per-dimension minimums, the on-fail routing (AI-auto, instructor-approved, or a specific path), and the remedial pool that feeds it.",
+      "waitFor": "[data-testid=\"assessment-settings-panel\"]",
+      "dependsOn": ["mission-control"]
+    },
+    {
+      "id": "doctrine-framework",
+      "title": "Doctrine + Framework",
+      "surface": "portal",
+      "voGist": "Mid-video governance proof point: the controlled source material and the six-capability framework weights, with Safety and Compliance weighted highest.",
+      "waitFor": "[data-testid=\"framework-weights\"]",
+      "dependsOn": ["course-builder"]
+    },
+    {
+      "id": "lxp-path",
+      "title": "LXP path",
+      "surface": "tablet",
+      "voGist": "On the learner tablet, the personalized path: what's up next, what's awaiting review, and what's still locked.",
+      "waitFor": "[data-testid=\"lxp-path\"]",
+      "dependsOn": ["doctrine-framework"]
+    },
+    {
+      "id": "imi-runner",
+      "title": "IMI runner",
+      "surface": "tablet",
+      "voGist": "Hands-on familiarization in the interactive module: reading the ground power cart output gauges for in-band voltage.",
+      "waitFor": "[data-testid=\"imi-runner\"]",
+      "dependsOn": ["lxp-path"]
+    },
+    {
+      "id": "vr-bridge",
+      "title": "VR bridge card",
+      "surface": "tablet",
+      "voGist": "The assessment-complete bridge card: results sent to CommandIQ. (Do not capture the headset runtime.)",
+      "waitFor": "[data-testid=\"vr-bridge-card\"]",
+      "dependsOn": ["imi-runner"]
+    },
+    {
+      "id": "session-review",
+      "title": "Learner session review",
+      "surface": "portal",
+      "voGist": "The instructor's learner session review: the per-dimension breakdown with failing dimensions in red, the audit trail, and the course rollup.",
+      "waitFor": "[data-testid=\"session-review-breakdown\"]",
+      "dependsOn": ["vr-bridge"]
+    },
+    {
+      "id": "adaptive-review",
+      "title": "Instructor adaptive review",
+      "surface": "portal",
+      "voGist": "The hero beat: the AI recommends about three targeted refreshers per failed dimension; the instructor curates or overrides. The AI recommends, the instructor approves.",
+      "waitFor": "[data-testid=\"adaptive-review-recommendations\"]",
+      "dependsOn": ["session-review"]
+    },
+    {
+      "id": "back-to-lxp",
+      "title": "Back to LXP",
+      "surface": "tablet",
+      "voGist": "The payoff: back on the learner's personalized path, the newly-assigned refreshers are now waiting up next.",
+      "waitFor": "[data-testid=\"lxp-path\"]",
+      "dependsOn": ["adaptive-review"]
+    }
+  ],
+  "deliver": {
+    "slack": {
+      "channel": "C05T9FA39DE",
+      "dm": true
+    },
+    "sheet": {
+      "id": "12MDZoe8QOjK-AYLRjUaiWRbFcblrdPVcmxzXJfvyhaE",
+      "tab": "Demo Videos",
+      "columns": ["Visibility", "Title", "Runtime", "Link", "Notes"]
+    },
+    "vimeo": {
+      "privacy": {
+        "view": "unlisted",
+        "embed": "whitelist"
+      }
+    }
+  },
+  "article": {
+    "zoho": {
+      "dc": "com",
+      "orgId": "830065756",
+      "rootCategory": "Using CommandIQ",
+      "permission": "ALL",
+      "status": "Draft"
+    }
+  }
+}

@@ -1,0 +1,348 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mothandflame.dev/schemas/video/flow.config.schema.json",
+  "title": "Demo Flow Config",
+  "description": "Per-flow configuration for the /video narrated product-demo pipeline. The capture -> VO -> assemble -> review engine is flow-agnostic; this config carries the flow-specific beat list, seed identity, app target, narration, and delivery destinations so a new flow can be produced without editing the SKILL or the tooling. schemaVersion pins the structural contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "flowId",
+    "title",
+    "targetRuntimeSec",
+    "narration",
+    "splash",
+    "app",
+    "seed",
+    "beats",
+    "deliver",
+    "article"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Structural version of this config contract. Bump only on a breaking shape change."
+    },
+    "flowId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Stable machine identifier for the flow (kebab/lowercase). Used for filenames, build-state keys, scope tags."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-facing title of the demo video (used in delivery rows and the article)."
+    },
+    "targetRuntimeSec": {
+      "type": "array",
+      "description": "Inclusive [min, max] target runtime window in seconds for the assembled MP4. The orchestrator gates final duration against this window.",
+      "items": { "type": "number", "exclusiveMinimum": 0 },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "narration": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Voiceover (ElevenLabs) settings shared across all beats.",
+      "required": ["voiceName", "voiceId", "model", "style"],
+      "properties": {
+        "voiceName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable ElevenLabs voice name to render the narration with."
+        },
+        "voiceId": {
+          "type": ["string", "null"],
+          "description": "ElevenLabs voice id. Null means resolve by voiceName at runtime (call the voices API and bind the id once)."
+        },
+        "model": {
+          "type": "string",
+          "const": "eleven_multilingual_v2",
+          "description": "ElevenLabs TTS model id."
+        },
+        "style": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Narration style directive (e.g. value-first / JTBD, plain-English, spoken full names not acronyms)."
+        }
+      }
+    },
+    "splash": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Loading-splash guard config. The app shows a branded loading splash on boot and on some in-app navigations; capture must wait it out and assembly must trim any frames that slip through.",
+      "required": ["anchorSelector", "loadingText", "maxTrimSec"],
+      "properties": {
+        "anchorSelector": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A known post-splash element selector to poll for before starting any value action (real screen anchor, not the splash)."
+        },
+        "loadingText": {
+          "type": "string",
+          "description": "The literal loading-splash copy to detect/forbid in final frames."
+        },
+        "maxTrimSec": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Cap on how much leading static/dark footage the splash auto-trim may remove, so a mis-detect can't eat real content."
+        }
+      }
+    },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Target running-app config the capture agents drive.",
+      "required": ["baseUrl", "auth", "viewports"],
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Base URL of the running app to drive (portal/instructor surface)."
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How capture establishes and maintains an authenticated session.",
+          "required": ["strategy", "refresh"],
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "enum": ["storageState", "supabase-password", "enrollment-blob", "none"],
+              "description": "Auth bootstrap strategy. storageState reuses a saved session across beats; supabase-password logs in fresh; enrollment-blob hydrates a learner PWA via localStorage; none for unauthenticated surfaces."
+            },
+            "refresh": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Session-refresh behavior for long captures.",
+              "required": ["strategy"],
+              "properties": {
+                "strategy": {
+                  "type": "string",
+                  "enum": ["supabase-refresh-token", "re-login", "none"],
+                  "description": "How an expired token is refreshed (Supabase refresh_token grant written back to storageState, full re-login, or none)."
+                }
+              }
+            }
+          }
+        },
+        "viewports": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Capture viewport sizes per surface family, as [width, height] pixel pairs.",
+          "required": ["portal", "tablet"],
+          "properties": {
+            "portal": {
+              "type": "array",
+              "description": "Desktop/portal capture viewport [w, h].",
+              "items": { "type": "integer", "exclusiveMinimum": 0 },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "tablet": {
+              "type": "array",
+              "description": "Tablet/mobile portrait capture viewport [w, h] (assembler pillarboxes onto the 1920x1080 canvas).",
+              "items": { "type": "integer", "exclusiveMinimum": 0 },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        }
+      }
+    },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Demo-data seeding contract. Identity must be deterministic across pre/post-state beats and PII-safe.",
+      "required": ["strategy", "scopeTag", "fixedEnrollmentCode", "piiSafe", "demoOrgAllowlist"],
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["script", "targeted-update", "none"],
+          "description": "How demo state is established/mutated. script seeds fresh; targeted-update mutates in place (preferred mid-flow to avoid re-minting captured identities); none if the env is pre-seeded."
+        },
+        "scopeTag": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Scope/tag applied to seeded rows so they can be isolated and cleaned up."
+        },
+        "fixedEnrollmentCode": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FIXED enrollment code so the same learner reads identically across beats. Human-friendly alphabet (no 0/O/1/I/L/5/S)."
+        },
+        "piiSafe": {
+          "type": "boolean",
+          "description": "Whether seeded data is guaranteed anonymized / PII-safe (no real learner names on camera)."
+        },
+        "demoOrgAllowlist": {
+          "type": "array",
+          "description": "Org names that demo seeding/capture is permitted to touch.",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        }
+      }
+    },
+    "beats": {
+      "type": "array",
+      "description": "Ordered beat list. Each beat is one capture unit (one webm). Order is the cut order.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "surface", "voGist", "waitFor", "dependsOn"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "Stable beat identifier (used for filenames scripts/demo/beats/NN-<id>.mjs and dependsOn references)."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-facing beat title."
+          },
+          "surface": {
+            "type": "string",
+            "enum": ["portal", "tablet"],
+            "description": "Which capture surface this beat records (portal desktop vs tablet portrait)."
+          },
+          "voGist": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The narration gist for this beat (value-first). Final VO copy is reconciled against captured pixels before TTS render."
+          },
+          "waitFor": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Post-splash / post-load anchor selector this beat must poll for before starting the value action."
+          },
+          "dependsOn": {
+            "type": "array",
+            "description": "Ids of beats that must be captured (or state-mutated) before this beat. Encodes lifecycle ordering (e.g. a post-review beat depends on the review action). Empty for independent beats.",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          }
+        }
+      }
+    },
+    "deliver": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where the finished video is delivered.",
+      "required": ["slack", "sheet", "vimeo"],
+      "properties": {
+        "slack": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Slack delivery target (brokered via the Mothy MCP).",
+          "required": ["channel", "dm"],
+          "properties": {
+            "channel": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Slack channel id to post the video to."
+            },
+            "dm": {
+              "type": "boolean",
+              "description": "Whether to also DM the requester."
+            }
+          }
+        },
+        "sheet": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Google Sheet log target (brokered via the Mothy MCP).",
+          "required": ["id", "tab", "columns"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Google Sheets workbook id."
+            },
+            "tab": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Tab/sheet name to append the row to."
+            },
+            "columns": {
+              "type": "array",
+              "description": "Ordered column headers the delivery row is written against.",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 1
+            }
+          }
+        },
+        "vimeo": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Vimeo upload settings.",
+          "required": ["privacy"],
+          "properties": {
+            "privacy": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Vimeo privacy settings for the uploaded video.",
+              "required": ["view", "embed"],
+              "properties": {
+                "view": {
+                  "type": "string",
+                  "enum": ["anybody", "nobody", "contacts", "password", "disable", "unlisted"],
+                  "description": "Who can view the video on Vimeo."
+                },
+                "embed": {
+                  "type": "string",
+                  "enum": ["public", "private", "whitelist"],
+                  "description": "Embed privacy for the video."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "article": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Knowledge-base article (/article) destination derived from this flow.",
+      "required": ["zoho"],
+      "properties": {
+        "zoho": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Zoho Desk KB publishing target.",
+          "required": ["dc", "orgId", "rootCategory", "permission", "status"],
+          "properties": {
+            "dc": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Zoho data center / domain (e.g. com, eu, in) used to build the API base URL."
+            },
+            "orgId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Zoho Desk org id."
+            },
+            "rootCategory": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Existing root KB category to publish under (cannot create a root category; reuse this and create only sections)."
+            },
+            "permission": {
+              "type": "string",
+              "description": "Article permission level (e.g. ALL)."
+            },
+            "status": {
+              "type": "string",
+              "enum": ["Draft", "Published"],
+              "description": "Publish status. Always Draft for automated runs."
+            }
+          }
+        }
+      }
+    }
+  }
+}
