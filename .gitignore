@@ -1,0 +1,14 @@
+# macOS Finder cruft
+.DS_Store
+**/.DS_Store
+
+# Local credential/state dir (env-var-first; fallbacks under .state/ should never be committed)
+.state/
+**/.state/
+
+# Editor scratch / backup files
+*~
+*.swp
+
+# Logs
+*.log
