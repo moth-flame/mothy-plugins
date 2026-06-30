@@ -1,6 +1,6 @@
 {
   "name": "mothy",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Moth+Flame team agent — briefs, decks, intel search, Google Workspace in-place edits, onboarding. Sign in with your @mothandflamevr.com Google account.",
   "author": {
     "name": "Moth+Flame",
@@ -13,6 +13,9 @@
     "briefs",
     "decks",
     "crm",
-    "google-workspace"
+    "google-workspace",
+    "video",
+    "article",
+    "demo"
   ]
 }

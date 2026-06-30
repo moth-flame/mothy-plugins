@@ -4,7 +4,8 @@ Private Claude Code / Cowork plugin marketplace for **Moth+Flame**.
 
 This marketplace ships a single plugin — **`mothy`** — bundling the Moth+Flame
 team agent's **skills + slash commands**: customer briefs, capability decks,
-cross-source intel, in-place Google Workspace edits, and teammate onboarding.
+cross-source intel, in-place Google Workspace edits, demo videos, KB articles,
+and teammate onboarding.
 
 ## 1. Add the marketplace + install the plugin
 
@@ -53,4 +54,4 @@ admin-minted token). Not in the registry yet? Message **Rich or Chris**.
 
 | Plugin  | What it does |
 |---------|--------------|
-| `mothy` | Moth+Flame team agent skills + commands — briefs, decks, intel, Google Workspace edits, onboarding. See [`plugins/mothy/README.md`](plugins/mothy/README.md). |
+| `mothy` | Moth+Flame team agent skills + commands — briefs, decks, intel, Google Workspace edits, demo videos (`/video`), KB articles (`/article`), video pipeline setup (`/video-setup`), onboarding. See [`plugins/mothy/README.md`](plugins/mothy/README.md). |

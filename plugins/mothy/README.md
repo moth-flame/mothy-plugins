@@ -77,14 +77,17 @@ name them:
 | **deck** | Building a customer-facing capability / pitch deck | "make a deck", "prep for a customer meeting", "draft a pitch for <prospect>", "/deck" |
 | **customer-brief** | A one-pager / context load on a Moth+Flame account | "brief me on <customer>", "I have a call with <customer>", "what do we know about <account>" |
 | **edit-in-place** | Editing existing Google Docs / Sheets / Slides surgically (in place, comments preserved) | "update this doc", "fix the numbers in that sheet", "tweak the speaker notes" |
+| **video** | Producing a narrated product-demo video by driving the real app (Playwright + ElevenLabs VO + ffmpeg) | "/video", "make a demo video", "record a product demo", "capture a walkthrough video" |
+| **article** | Turning a product-demo flow into a Zoho Desk KB article (embedded video + step-by-step walkthrough with per-action screenshots) | "/article", "make a KB article", "turn this demo into a help article", "publish a walkthrough to Zoho Desk" |
+| **video-setup** | One-time setup for the `/video` + `/article` pipeline — credentials and tooling checks | "/video-setup", "set up the video pipeline", "configure demo capture" |
 | **onboard** *(admin)* | Onboarding a teammate to vibe coding | "onboard @user", "set up X with vibe coding" |
 
 ## Support matrix
 
 | Component | Claude Code | Cowork |
 |-----------|-------------|--------|
-| Skills (deck, customer-brief, edit-in-place, onboard) | ✅ | ✅ |
-| Slash commands (`/deck`, `/brief`, `/onboard`) | ✅ confirmed | ⏳ verify per build |
+| Skills (deck, customer-brief, edit-in-place, video, article, video-setup, onboard) | ✅ | ✅ |
+| Slash commands (`/deck`, `/brief`, `/video`, `/article`, `/video-setup`, `/onboard`) | ✅ confirmed | ⏳ verify per build |
 | Mothy MCP tools (via the separately-added connector) | ✅ | ✅ |
 | Plugin-bundled connector OAuth | n/a (skills-only) | n/a (skills-only) |
 
