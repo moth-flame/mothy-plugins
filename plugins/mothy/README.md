@@ -81,13 +81,29 @@ name them:
 | **article** | Turning a product-demo flow into a Zoho Desk KB article (embedded video + step-by-step walkthrough with per-action screenshots) | "/article", "make a KB article", "turn this demo into a help article", "publish a walkthrough to Zoho Desk" |
 | **video-setup** | One-time setup for the `/video` + `/article` pipeline — credentials and tooling checks | "/video-setup", "set up the video pipeline", "configure demo capture" |
 | **onboard** *(admin)* | Onboarding a teammate to vibe coding | "onboard @user", "set up X with vibe coding" |
+| **plan** *(engineering)* | Designing a change with a multi-role sub-agent panel, then one synthesized plan | "plan this", "have a team plan this", "spawn a roundtable", "/plan" |
+| **build** *(engineering)* | Executing a plan — parallel build+test sub-agents, red-green TDD, adversarial verification, local commits | "build it", "implement the plan", "ship it", "execute the plan", "/build" |
+| **test** *(engineering)* | Writing red-green tests then adversarially auditing them (would they catch a broken impl?) | "test this", "write tests for X", "are these tests any good", "make sure this actually works", "/test" |
+| **fix** *(engineering)* | Reproduce a bug as a failing test, root-cause it, apply the smallest fix, verify no regression | "this is broken", "debug and fix", "track down and fix", "/fix" |
+
+The four **engineering skills** (plan → build → test → fix) bring the same
+multi-role sub-agent orchestration the Moth+Flame team uses in Claude Code to
+**Cowork and the desktop app**: the main thread stays a conductor and fans work
+out to focused sub-agents (independent role-based planners; parallel build+test;
+adversarial impl-verifiers + test-auditors; read-only diagnosis scouts). Like
+every skill here they **auto-fire on intent** — you don't have to type the slash
+command; describing the work ("plan this", "build it", "this is broken", "make
+sure it actually works") is enough. Orchestration uses whatever sub-agent
+mechanism the surface provides (the Workflow/Task tools in Claude Code; Cowork's
+native sub-agents) — the same pattern the shipped `video` skill already runs.
 
 ## Support matrix
 
 | Component | Claude Code | Cowork |
 |-----------|-------------|--------|
 | Skills (deck, customer-brief, edit-in-place, video, article, video-setup, onboard) | ✅ | ✅ |
-| Slash commands (`/deck`, `/brief`, `/video`, `/article`, `/video-setup`, `/onboard`) | ✅ confirmed | ⏳ verify per build |
+| Engineering skills (plan, build, test, fix — multi-agent orchestration) | ✅ | ✅ |
+| Slash commands (`/deck`, `/brief`, `/video`, `/article`, `/video-setup`, `/onboard`, `/plan`, `/build`, `/test`, `/fix`) | ✅ confirmed | ⏳ verify per build |
 | Mothy MCP tools (via the separately-added connector) | ✅ | ✅ |
 | Plugin-bundled connector OAuth | n/a (skills-only) | n/a (skills-only) |
 

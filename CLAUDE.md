@@ -45,11 +45,16 @@ Mothy is two cooperating surfaces — never confuse them
 - `plugins/mothy/.claude-plugin/plugin.json` — plugin manifest (name, version,
   metadata). Bump `version` when shipping plugin changes.
 - `plugins/mothy/commands/*.md` — **thin** slash-command entrypoints (`/connect`,
-  `/brief`, `/deck`, `/video`, `/article`, `/video-setup`, `/onboard`).
+  `/brief`, `/deck`, `/video`, `/article`, `/video-setup`, `/onboard`, plus the
+  engineering set `/plan`, `/build`, `/test`, `/fix`).
   Frontmatter + a one-line invoke of the matching skill. **No logic here.**
 - `plugins/mothy/skills/<name>/SKILL.md` — **canonical** skill orchestration
   (connect, customer-brief, deck, edit-in-place, video, article, video-setup,
-  onboard, dev-setup).
+  onboard, dev-setup, plus the engineering skills plan / build / test / fix).
+  The engineering skills are synced verbatim from the Mothy repo's
+  `.claude/skills/{plan,build,test,fix}/` (the source of truth for the team's
+  Claude-Code standard) so Cowork/desktop users get the same multi-agent
+  orchestration. Re-sync when the Mothy repo versions change.
 - `plugins/mothy/skills/video/tooling/` — vendored implementation scoped
   **under the video skill** (never a sibling skill, never `skills/_shared/`):
   `lib/` (Playwright/ffmpeg/ElevenLabs/creds glue), `flows/` config,
