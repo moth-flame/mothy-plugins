@@ -1,0 +1,5 @@
+# case-02 — self-skipped modal test (no tombstone)
+
+A test author silently drops the 400-with-suggestions branch — one of three declared acceptance criteria — with a bare comment "dropped 400-with-suggestions test — hard to write deterministically." No `// SKIP: R-XX — <reason>` tombstone, no upstream coverage citation, no follow-up issue link. The two remaining tests pass. The build agent's impl looks plausible. Verifier-less /build ships this with two tests green and the third branch totally uncovered — exactly the failure mode R-05 names. Six weeks later an AE types a fuzzy name, the API returns 400 with suggestions, and the UI either silently swallows them or renders garbage; nobody knows because the test wasn't there.
+
+What the verifier catches: R-05 fires on the comment alone — the closed-set rubric is explicit that "hard to write deterministically" without a tombstone is a bug class, not a style note. The verifier doesn't need to read the impl to flag this — the missing test for a declared AC is visible in the diff. The fix prescription is concrete: write the test OR tombstone with a citation.

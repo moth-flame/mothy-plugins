@@ -20,6 +20,11 @@ The engine is driven by a **flow config**: a JSON file that carries everything f
 
 **Default flow:** when the user names no flow, default to `commandmro.config.json` — the bundled CommandIQ reference flow (the 9-beat CommandMRO capability reel documented in the reference appendix). When the user names a flow (`/video <flowId>`), load `<flowId>.config.json`.
 
+**NEW walkthrough with no ready flow — use the shared corpus, don't reinvent it (Rich, 2026-07-02).** There is ONE shared library of CommandIQ flow recipes (build spec + click path per walkthrough), shared by every surface (Cowork desktop, Cloud, Agent37) and reached through the mothy MCP actions. When a request has no ready flow config:
+1. **Query the corpus first** — `mothy({action:"video_flow_kb",params:{query}})` — if a recipe already has the click path, reuse it. Never re-research what's already recorded.
+2. Only for a genuine gap, research the real click path/selectors with `mothy({action:"commandiq_repo_intel",params:{question}})` (Agent37 reads a mirror of the CommandIQ repo; users have no repo access — never guess).
+3. Contribute it back with `mothy({action:"video_flow_request",params:{title,description,click_path,audience}})` so the next request (any surface) reuses it. No DM, no human hand-off.
+
 **Resolution order (lowest → highest precedence):**
 
 1. **Engine defaults** — the flow-agnostic constants baked into this SKILL + the tooling (1920×1080 / 30fps / yuv420p / h264 / aac-48k output; `eleven_multilingual_v2`; the live-render review bar; the motion contract; the splash guard mechanics).
@@ -44,6 +49,8 @@ The engine is driven by a **flow config**: a JSON file that carries everything f
 ## The deliverable + acceptance bar
 
 One MP4: 1920×1080, 30fps, h264/yuv420p + aac, continuous VO, all beats in order, no clipped narration, no raw IDs / debug / "preview/dummy/showcase" copy on screen. The bar is **the live-render review (§7)** — the orchestrator READS the rendered frames and judges them, not just ffprobe.
+
+**NO human-approval pause (Rich, 2026-07-02).** The live-render review (§7) is the agent's OWN confidence gate — when it passes, publish to Vimeo (per `config.deliver.vimeo.privacy`, default unlisted) and hand over the link immediately; never park a finished render waiting for a human sign-off. The unlisted link is the safety valve, not a review queue. Only stop for a human when the review still FAILS after the bounded fix loop (then report the defects + the draft path instead of publishing). The remote Agent37 worker follows the same protocol (its pause mode is env opt-in `RENDER_QA_PAUSE=1`, default OFF).
 
 **Delivery — Slack-DM the path AND publish to Vimeo + the team channel** (all destinations come from `config.deliver`). Once the MP4 passes the live-render review (§7), every /video run completes ALL of these (not optional):
 
@@ -120,6 +127,8 @@ Use `${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/lib/overlay.js`:
 
 ## 5. Voiceover (ElevenLabs)
 
+**Narration principle — value-first, the hard rule.** VO emphasizes ONLY three things, and every line must answer the customer's *"what does this do for me?"*: **(a) how the feature works**, **(b) the value it delivers**, **(c) the customer's job-to-be-done** (this is what `config.narration.style` defaults to). **NEVER narrate internal UI / design-implementation details** — line routing, why an element sits where it does, color/spacing/positioning choices, "the lines never intersect", visual-polish rationale, framework internals, or how it was built. That is *builder guidance*, not customer value. **Litmus test: if a visual detail doesn't change what the user can DO or decide, it does not belong in the VO.** (Origin: a Career Map reel narrated that the subway lines "never intersect" — pure styling guidance the customer does not care about.) Keep this consistent with the pacing rules below: one voice, pacing matched to the beats, no dead air, spoken full names not acronyms.
+
 - **Raw REST** `api.elevenlabs.io/v1/text-to-speech/{voice_id}` with the `xi-api-key` header (key from the `ELEVENLABS_API_KEY` env var — strip surrounding quotes; see Credentials). There is NO Node TTS SDK; `@elevenlabs/react` is browser-only. Use `${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/tts.mjs`.
 - Model `config.narration.model` (`eleven_multilingual_v2`). **Resolve `config.narration.voiceId` at runtime** when it's null (`GET /v1/voices` by `config.narration.voiceName`) — ids vary per account; don't hardcode. Default narrator: a confident-warm pro male (Brian / Adam). Render a sample line in two voices and let the user pick when the voice isn't already locked.
 - One mp3 per beat + a durations manifest (ffprobe).
@@ -142,8 +151,38 @@ After assembly, the ORCHESTRATOR **Reads the per-beat thumbnail frames** (and sp
 - **REQUIRED — scan for Playwright-induced UI glitches.** Automated browser driving leaves artifacts a real user never sees. Check every beat for: **stray focus rings** (a blue/cyan outline stuck on a button or input after a programmatic click), **half-loaded / empty states** (a skeleton, spinner, blank card, or zero-data table the capture caught mid-fetch), **scrollbar jumps** (the page scroll position snapping when `scrollIntoViewIfNeeded` fired), and **hover states stuck on** (a row/button frozen in its hover style because the synthetic cursor is `pointer-events:none` and never emits a real `mouseleave`). **Re-capture any beat that shows them** — blur the focused element / wait for the loaded state / settle the scroll before recording, or move the synthetic cursor off the element before the hold frame.
 - **REQUIRED — no loading-splash frames anywhere in the cut** (§3 capture-wait + §6 auto-trim). If a thumbnail or spot-check shows the splash (`config.splash.loadingText`), the beat failed — re-capture or re-trim it.
 
+### 7a. Automated A/V integrity gates (run on EVERY assembled cut — non-negotiable)
+
+Frame-sampling by eye misses whole-timeline defects (a black open under VO shipped past a beat-by-beat check). These `ffmpeg` passes are deterministic, cheap, and catch what eyes don't. A cut does not ship until ALL pass — and they are re-run on the **live downloaded file after upload** (§7b), not just the local assembly.
+
+- **Black-under-audio** — a black/blank screen while VO plays (the exact class that shipped a **6.6s black open**). Run:
+  `ffmpeg -i cut.mp4 -vf blackdetect=d=0.3:pix_th=0.10 -an -f null -`
+  Cross-reference every reported `black_start/black_end` against the audio track. **Any black span ≥0.5s that overlaps VO/audio is a FAIL.** An intentional fade-in stays <0.5s. Fix by filling the black with the adjacent real footage from t=0 (or the intended title card) — never by trimming the VO to hide it.
+- **Silent-under-video** — the reverse: sustained video playing with NO voiceover/audio (a dead-air hole or a dropped VO line). Run:
+  `ffmpeg -i cut.mp4 -af silencedetect=noise=-40dB:d=1.5 -f null -`
+  **Flag any `silence_duration` ≥1.5s that occurs while non-black video is on screen.** Distinguish an intentional beat-pause (short, ≤~1.2s — fine) from a missing-VO hole (fix by adding/repositioning the VO or shortening the beat). Every sustained visual beat should have narration over it.
+- **Sentences running together — too LITTLE silence between separate VO clips.** When separately-rendered VO lines are concatenated edge-to-edge, they sound like one run-on sentence (real failure: `"…minutes, not weeks."` butted straight into `"Open a position…"` with no gap). This is the inverse of silent-under-video and `silencedetect` alone won't catch it (there's no long silence — there's *not enough*). **Detect via word-level STT** (§7c): at each sentence boundary — the last word of one sentence → the first word of the next, and ESPECIALLY at every seam between two distinct VO clips — compute `gap = start_next − end_prev`. **Flag any inter-sentence gap < ~0.35s as a run-together FAIL.** (A comfortable inter-sentence beat is ~0.4–0.7s.) **Prevention (assembly, §6):** the assembler MUST insert a minimum **~0.5s of silence pad between every distinct VO clip** — never concatenate two VO files with no gap. Fix an existing run-together by inserting the pad at the offending seam (push the later clip + its video later, or add silence to the tail of the earlier clip).
+- **A/V presence + parity** — `ffprobe` the file: it MUST have both a video AND an audio stream, and **video duration == audio duration** (a video that ends before its VO finishes, or trails silent after it, is a FAIL).
+- **Single continuous voice, no clipping** — `ffmpeg -i cut.mp4 -af volumedetect -f null -`: consistent `mean_volume`, `max_volume` not pinned near 0 dB (clipping), no loudness jump at beat seams (a spliced-in beat that wasn't loudnorm-matched).
+
+### 7b. Verify the SHIPPED artifact — not the report, not a stale local file
+
+- **A sub-agent's "done" is a claim, not proof.** Local scratch gets cleaned mid-session and a stale local `.mp4` won't reflect what actually uploaded. After any Vimeo **replace-in-place**: (1) confirm via the Vimeo API that a genuinely NEW version transcoded — new version id, `transcode:complete`, expected `duration`; (2) **download the live rendition** and run the §7 frame checks + §7a integrity gates + §7c transcript on THAT file. Never report a video done off the agent's word or an old local copy.
+- **Locate a defect densely, don't luma-average.** To find a brief splash/black/glitch, scan frames every ~0.3s across the suspect window (or the whole file) — a montage/average-brightness check misses a 2–3-frame flash. Pin the exact start/end timestamps, then cut cleanly.
+
+### 7c. VO says what it should — transcribe, don't assume
+
+ElevenLabs render can silently diverge from the script (the word "seed" came out **"see to"**; a "roadmap" line survived a requested rewrite). **Transcribe the FINAL audio** (ElevenLabs STT / whisper, word-level) and scan the actual spoken text for: (a) correctness of the key words/claims, (b) any forbidden language (e.g. "coming soon / roadmap / beta / on the way" when the ask was plain present-tense), (c) VO↔visual sync (the line lands over the beat it describes). **The transcript — not the script you fed in — is the source of truth for the VO.**
+
+### 7d. Orchestrator owns the pass/fail
+
+The "look with your own eyes" judgment stays with the orchestrator: the capture agent renders + reports a one-line verdict, but the orchestrator makes the §7/§7a/§7c pass/fail against the checklist before it reaches the user. **If it's not clean, fix it first — never surface a video the user has to QA for you.**
+
 ## 8. Seeding + data discipline
 
+- **Demo-seed writes are PRE-AUTHORIZED — do not stop to ask, and never brief a capture agent "read-only, no writes."** When a beat needs data that isn't there (a failing run, a pending recommendation, a learner state), CREATE it — this is a demo org and seed data is re-creatable + reversible (a 2-way door). Rich's standing rule (2026-07-02): *any time seeded data needs to be created for a demo org, the agent is authorized to create it.* Scope = the orgs on `config.seed.demoOrgAllowlist` (demo orgs / dev tenants only); NOT prod, NOT real customer data; still honor hard security gates (a secret/confirmation-code is a control — request it, never bypass) and never destructive ops on real (non-seed) data.
+  - **Put the authorization in the capture agent's ORIGINAL brief** ("you are authorized to create/seed scoped, reversible demo data in this demo org — proceed without asking"). A blanket "read-only" clause in a sub-agent brief becomes an *unliftable* boundary: the harness will NOT let a coordinator follow-up (relaying the user's approval) override a boundary the agent's own prompt set, so the task deadlocks. If discovery must precede the write, phrase it as "read-only until you confirm the target, THEN you are authorized to write the scoped seed" — in the same first prompt.
+  - If an agent is already deadlocked this way, don't keep relaying approval to it (every relay is rejected) — dispatch a FRESH agent with the authorization baked into its first prompt, reusing the staged artifacts.
 - **Additive + idempotent + scoped teardown.** Tag synthetic rows with `config.seed.scopeTag` (e.g. `scoring_model='vr_mock'`, `is_testing=true`) so a `--reset` removes ONLY them and never real data (Rule 23/56). Never delete a learner.
 - **Deterministic identity.** Use `config.seed.fixedEnrollmentCode` so the same learner reads identically across pre- and post-state beats (a random code re-mints and breaks on-screen continuity). Human-friendly alphabet (no 0/O/1/I/L/5/S).
 - **Lifecycle ordering.** A pre-review beat and a post-review beat need the SAME learner at two states (encoded as `config.beats[].dependsOn`). Capture the pre-state, then the mutating action (e.g. approve), then the post-state — or update state in place (targeted UPDATE, `config.seed.strategy='targeted-update'`) rather than reseeding (a reseed re-mints and cascades into already-captured dependent beats).
@@ -176,6 +215,7 @@ DON'T:
 - Don't capture with a vite-only `npm run dev` expecting `/api` to work, or reach for `vercel dev` (see the reference appendix for the shim).
 - Don't use a random enrollment code (breaks cross-beat continuity) or reseed mid-flow when a targeted UPDATE suffices (reseed re-mints + cascades into captured beats).
 - Don't blind-pad over-long beats (dead air) or trim a beat through a reveal the VO references.
+- **Don't narrate internal UI / design-implementation detail in the VO** — line routing, positioning/color/spacing choices, "the lines never intersect", visual-polish rationale, framework internals, or how it was built. Narrate only how the feature works, its value, and the customer's job-to-be-done (§5). If a visual detail doesn't change what the user can DO or decide, it stays out of the narration.
 - Don't commit video binaries. Don't ship a beat that failed GATE-B or weaken the gate silently.
 - Don't put raw UUIDs / "Untitled" / debug / "preview/dummy/showcase" copy on screen.
 - Don't leave the loading splash (`config.splash.loadingText`) in a final cut, and don't ship a beat with a Playwright glitch (stray focus ring, half-loaded/empty state, scrollbar jump, stuck hover) — re-capture it.
@@ -232,6 +272,17 @@ Ask via AskUserQuestion: "Use C-130 Maintenance Foundations + the External Power
 
 - **Instructor portal** = Vite SPA, `npm run dev` → `localhost:3000`, hash routing, Supabase email/pw, technical org → dark layout. **Learner LXP** = Expo, `cd apps/mobile && npx expo start --web` → `localhost:8081/lxp`. **IMI** = Vite `/imi/<module>` (Rule 36 — the Vite runtime is what prod iframes; the Expo IMI manifest may differ).
 - **`npm run dev` is vite-only — `/api/*` are NOT served.** `vercel dev` is UNUSABLE here (`vercel.json` > 128 builds → hard error). Stand up a tiny Node shim that mounts the real `api/*.js` handlers against `.env.local` on `:3001`; metro proxies `/api/*` → `:3001` for the Expo LXP. (The shim lives in `scripts/demo/.state/api-server.mjs` from the last build — a flow asset, gitignored, not vendored tooling.)
+- **Known demo logins (seeded, ready to use — no need to re-mint for local capture).** These are the instructor-portal email/password accounts that authenticate against the **iicwt dev** project (`https://iicwtetojqokdkrmqoab.supabase.co`), which is what `localhost:3001` / the local portal points at (`.env.local`). Both were provisioned via the **GoTrue Auth Admin API** (`POST/PUT {SUPABASE_URL}/auth/v1/admin/users` with `email_confirm:true`) — NOT raw-SQL `crypt()`, which GoTrue rejects on login. Both verified HTTP 200 on the password grant. Passwords resolve from env vars **at runtime** (same rule as the demo-capture login above — NEVER write a literal password into any file, brief, log, or committed artifact).
+
+  | account (email) | password source | environment | org / product_line | notes |
+  |---|---|---|---|---|
+  | `buyer-demo@meridianhealth.test` | `COMMANDIQ_ORGADMIN_CAPTURE_PASSWORD` env var | local → iicwt dev | Apex Aerospace MRO · `strategic` | **PRIMARY demo login** — full seeded data (course, learners, positions/career-map, SCORM/HIPAA, compliance). `role=instructor`, `org_role=admin`. Display name "Elena Marchetti". |
+  | `ciq-demo@commandiq.test` | `COMMANDIQ_SUPERADMIN_CAPTURE_PASSWORD` env var | local → iicwt dev | Apex Aerospace MRO · `strategic` | Fallback demo login. `role=instructor`, `org_role=admin`, `is_super_admin=true` (can navigate all demo orgs). Wired to the same seeded org as buyer-demo. |
+
+  - The org id is `d0000000-0000-4000-a000-000000000001` (the seed's original "Meridian Health Systems" org, later renamed "Apex Aerospace MRO"; slug `apex-aerospace-mro-buyer-demo`). It carries the `.ciq-seed.mjs` + `.ciq-seed2.mjs` demo content.
+  - **sb-gov (deployed dev) HAS these accounts too (verified 2026-07-01: password grant 200 for both against `https://dev-commandiq-sb-gov.mothandflamevr.com`).** buyer-demo = org_role=admin on the Apex org (display name there is "Dana Whitfield"); ciq-demo = is_super_admin=true + Apex admin. The Apex org + "MRO Program Management Leadership Track" course exist on sb-gov. Prod (`nkxbvimkxejkoecmujei`) does NOT have them — provision separately per the "Capturing against PRODUCTION" section below.
+  - **Org traversal rule:** when a capture needs an org the org-admin account (`buyer-demo`) isn't a member of, use the SUPER-ADMIN login (`ciq-demo@commandiq.test`, `is_super_admin=true` on BOTH iicwt and sb-gov — verified 2026-07-01) — it traverses every org in CommandIQ. On Agent37 the pair is `COMMANDIQ_SUPERADMIN_CAPTURE_EMAIL`/`_PASSWORD` (capture stage forwards it to beats). Trade-off: super-admin chrome (all-orgs switcher, platform tabs) appears on camera — prefer buyer-demo when filming inside one org.
+  - If a password ever stops working, re-set it (don't re-mint) via `PUT {SUPABASE_URL}/auth/v1/admin/users/<id>` `{"password":"…","email_confirm":true}` using the iicwt service-role key from `.env.local`.
 - **Local DB = iicwt** (`.env.local` `VITE_SUPABASE_URL` + `SUPABASE_DB_URL`/service-role). Deployed dev reads a different DB — seed + capture LOCAL only.
 - **Enrollment (Rule 40):** step-2 mints a PERSONAL code; bootstrap the learner PWA already-authed via the `ciq.lxp.enrollment` localStorage blob (skip the 3-step UI on camera).
 - **Testing filter (Rule 56):** an `is_testing=true` learner is hidden from cohort analytics by default — set `ciq.experience.hideTesting.<scope>=false` if you need them visible.

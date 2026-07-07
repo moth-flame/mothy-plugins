@@ -1,0 +1,8 @@
+{
+  "unit_id": "case-01",
+  "expected_findings": [
+    { "rubric_id": "R-03", "severity_min": "high" },
+    { "rubric_id": "R-07", "severity_min": "high" }
+  ],
+  "expected_overall_verdict": "rework"
+}

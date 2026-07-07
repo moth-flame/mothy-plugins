@@ -14,6 +14,8 @@ NOT for: a blog post, in-app tooltip/help copy, a slide deck, raw screenshots wi
 
 If the user names a specific demo flow (e.g. the **CommandIQ / CommandMRO** flow) → the article documents the same beats the `/video` skill captured (see that skill's beat list / flow config). Confirm the flow + the Vimeo link before building.
 
+**Demo-seed writes are PRE-AUTHORIZED (same rule as `/video` §8).** If re-driving the app to source a missing screenshot needs data that isn't there, CREATE the scoped, reversible demo data — this is a demo org and Rich pre-authorized it (2026-07-02). Put the authorization in the capture agent's ORIGINAL brief; NEVER brief a demo capture agent "read-only, no writes" (that becomes an unliftable boundary the harness won't let a coordinator follow-up override). Scope = demo orgs / dev only (the orgs on `config.seed.demoOrgAllowlist`), never prod / real customer data, always honoring hard security gates.
+
 ## The deliverable + acceptance bar
 
 One Zoho Desk KB article, **status = Draft**, under the flow's configured **root category** (`config.article.zoho.rootCategory`) in a sensible **section**, **permission = `config.article.zoho.permission` (ALL / everyone)**, with:
@@ -83,6 +85,7 @@ plan/confirm → run PUBLISH GATE → gather per-step screenshots + instructions
             → read KB categories → choose configured root category → create/choose section under it
             → build HTML (video embed at top, then one block per step: screenshot + instruction)
             → embed each screenshot as a base64 data: URI → SANITIZE the HTML → create DRAFT article (permission=ALL)
+            → MANDATORY: re-fetch the article and verify every <img> src is a data:image/ URI + the video iframe src carries ?h= — retry/fix before reporting done
             → return the Draft article URL for review
 ```
 
@@ -140,15 +143,20 @@ Caveat: **some helpcenter themes strip `data:` URIs** when rendering. So **revie
 
 Clean, semantic markup compatible with Zoho's KB editor:
 
-- **Video embed FIRST**, at the very top of the body — a Vimeo player. Use the Vimeo `<iframe>` player embed:
+- **Video embed FIRST**, at the very top of the body — an INLINE Vimeo player that plays IN the article (not a click-to-open-new-tab thumbnail). Use the Vimeo `<iframe>` player embed:
   ```html
   <div class="kb-video">
-    <iframe src="https://player.vimeo.com/video/<VIDEO_ID>"
+    <iframe src="https://player.vimeo.com/video/<VIDEO_ID>?h=<HASH>"
             width="640" height="360" frameborder="0"
             allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
   </div>
   ```
   (Resolve the player URL via Vimeo oEmbed `https://vimeo.com/api/oembed.json?url=<vimeo-url>` if you only have the share link.) Put a short intro paragraph under the player ("Watch the walkthrough above, or follow the step-by-step instructions below.").
+
+  **CRITICAL — the `?h=<HASH>` is MANDATORY for UNLISTED videos (2026-07-02 incident).** Every `/video` upload defaults to `config.deliver.vimeo.privacy.view=unlisted`, and an unlisted Vimeo video will NOT embed without its private hash in the player src — the iframe renders BLANK. The share link is `https://vimeo.com/<VIDEO_ID>/<HASH>`; the embed src is `https://player.vimeo.com/video/<VIDEO_ID>?h=<HASH>`. Get both from the Vimeo API `GET /videos/<id>` → `link` (has the hash) and `player_embed_url`. NEVER emit `player.vimeo.com/video/<id>` with no `?h=` for an unlisted video — that was the root cause of "the videos don't show." Also confirm the upload set `privacy.embed=public` (embeddable on any domain) — check via the API, not by assumption. (The `?h=` query keeps the src inside the publish gate's `https://player.vimeo.com/` prefix rule.)
+  - Zoho bakes a `sandbox="allow-scripts allow-forms allow-same-origin allow-presentation ..."` onto the stored iframe. That sandbox INCLUDES `allow-scripts` + `allow-same-origin`, so a correctly-formed player (with the hash) DOES play inline inside Zoho — the sandbox is not the blocker; the missing hash was. Keep the `allow="autoplay; fullscreen; picture-in-picture"` attribute (Zoho may strip it, but basic click-to-play still works).
+  - **VERIFY it actually renders (mandatory, per §5 step 7):** after create/update, re-fetch the stored body and confirm the iframe src contains `?h=`. Where possible, load the stored HTML in a headless browser and confirm the Vimeo `<iframe>` resolves (the player element loads, not a blank/error box). Do not trust that "an iframe is present" = "the video plays."
+  - **Fallback ONLY if a given Zoho instance genuinely strips the iframe dead:** a clickable base64 data-URI poster (Vimeo thumbnail + play button) linking to `https://vimeo.com/<id>/<hash>`. This opens Vimeo in a new tab — it is the LAST resort, not the default, because it defeats inline playback. Prefer the inline iframe; only drop to the poster if you have PROVEN the inline player will not render in the target instance, and say so.
 - **Then one block per step**, in order — each block = the step's screenshot (inline base64 `data:` URI) + its instruction:
   ```html
   <h3>Step N — <short title></h3>
@@ -189,9 +197,16 @@ Dispatch this whole sequence to ONE sub-agent (per the Orchestration section) �
 3. Assemble the HTML: video embed at top, then per-step blocks, each screenshot embedded as an inline base64 `data:image/...` URI (do NOT call the Zoho image-upload API — it 404s).
 4. Confirm the publish gate passed (the orchestrator gates before dispatch; the agent re-asserts the HTML-sanitize check on its own assembled body as a last line of defense).
 5. `POST /api/v1/articles` with `categoryId`=section id, `title`, `answer`=HTML, `permission`=`config.article.zoho.permission`, `status`=`"Draft"`, `orgId` header.
-6. From the create response, build the **Draft article URL** (the agent/admin edit URL for the new article id) and report it back. **Do not publish** — the human reviews + publishes from Zoho.
+6. From the create response, build the **Draft article URL** (the agent/admin edit URL for the new article id).
+7. **MANDATORY VERIFICATION — the article is not "done" until this passes.** `GET /api/v1/articles/{id}` (re-fetch, don't trust the create response's echoed body) and assert, programmatically:
+   - Every `<img>` tag's `src` starts with `data:image/` (or, if a future method other than data-URI is ever used, that it is a confirmed Zoho-hosted URL verified by a HEAD/GET request that returns `200` **without** an `Authorization` header — i.e. actually publicly renderable, not just present).
+   - The video iframe `src` starts with `https://player.vimeo.com/` and contains `?h=` (unlisted videos render blank without the hash — §4).
+   - Zero `[Screenshot: ...]` or `[Video: ...]` placeholder text left un-replaced in the `answer` HTML.
+   - The count of images in the final HTML matches the count of steps planned.
+   If any assertion fails: fix it (re-encode/re-embed) and re-PATCH, then re-verify. Do not report the article as complete on a failed or skipped verification.
+8. Report back: the Draft article id + URL, the section it landed under, the embedded-image count, confirmation `status=Draft`, and the verification result from step 7 (pass, with the assertions checked). **Do not publish** — the human reviews + publishes from Zoho.
 
-The main thread then reads the agent's report + Draft preview, judges reader parity AND confirms the embedded screenshots actually render (theme may strip `data:` URIs — fallback is pasting via the Zoho web editor), and returns the Draft URL to the user.
+The main thread then reads the agent's report + Draft preview, judges reader parity, spot-checks that the verification in step 7 was actually run (not just claimed), AND confirms the embedded screenshots actually render (theme may strip `data:` URIs — fallback is pasting via the Zoho web editor), and returns the Draft URL to the user.
 
 ## Dos and Don'ts
 
@@ -204,6 +219,7 @@ DO:
 - Read the live KB category list FIRST; place under the configured **root category**; create only a **section** under it (cannot create a root category — 403).
 - Create the article as **Draft** with **all-users** permission. Embed every screenshot as an inline base64 `data:` URI; review the rendered Draft to confirm they display (theme may strip them → paste via the Zoho web editor).
 - Scrub PII from screenshots before embedding. Spell out full feature names, not acronyms.
+- **Re-fetch the article after create/update and programmatically verify every `<img>` src is a `data:image/` URI (or a confirmed-public URL) and the video iframe carries `?h=` before reporting done** (§5 step 7). This is mandatory, not optional — it is the check that would have caught the 2026-07-02 broken-embeds incident before the user did.
 - Return the Draft article URL for human review.
 
 DON'T:
@@ -213,8 +229,10 @@ DON'T:
 - Don't call the Zoho image-upload API (404s with this token) — embed base64 `data:` URIs inline instead.
 - Don't try to create a root category (403) — reuse the configured one and create only a section.
 - Don't restrict the article to signed-in users / agents — permission is **all/everyone** per config.
-- Don't skip a step's screenshot — every click/type step gets its own image + instruction (no orphan images, no instruction-only steps).
+- Don't skip a step's screenshot — every click/type step gets its own image + instruction (no orphan images, no instruction-only steps, no `[Screenshot: ...]` placeholder text left in the shipped HTML).
 - Don't hot-link the scratchpad path in the HTML — the answer must render standalone from its own inline images.
+- Don't embed an unlisted Vimeo video without its `?h=<HASH>` in the player src — it renders BLANK (§4; 2026-07-02 incident).
+- Don't skip the post-create/update verification step (§5 step 7) or accept an agent's unverified claim that images are "embedded" — re-fetch and check the actual `src` values.
 - Don't echo or commit the client secret / refresh token / access token, and don't commit the article images or `.state/` creds (gitignored — keep it that way).
 - Don't put raw UUIDs / debug / "preview/dummy/showcase" copy, PII, `<script>`, `on*` handlers, `javascript:` URIs, or non-image `data:` URIs into the article.
 - Don't assume a data center — read `config.article.zoho.dc` (CommandIQ is US `com`).
@@ -233,6 +251,7 @@ DON'T:
 | Create SECTION only | `POST` categories endpoint, `name` + `parentCategoryId` (root-category create 403s) |
 | Create article | `POST /api/v1/articles` → `{categoryId(section), title, answer(HTML), permission(config), status:"Draft"}` |
 | Images | Embed inline base64 `data:image/...` URIs (Zoho upload API 404s); review rendered Draft, fallback = paste via web editor |
-| Video embed | Vimeo `<iframe>` player at top (oEmbed `https://vimeo.com/api/oembed.json` to resolve) |
+| Video embed | INLINE Vimeo `<iframe>` player at top, src `player.vimeo.com/video/<id>?h=<HASH>` — the `?h=<HASH>` is MANDATORY for unlisted videos or it renders blank (2026-07-02 incident). Verify `privacy.embed=public`. oEmbed `https://vimeo.com/api/oembed.json` to resolve; click-to-open poster is a LAST-resort fallback only |
+| Post-write verification | **Mandatory** — re-`GET` the article, assert every `<img src>` starts with `data:image/`, iframe src carries `?h=`, zero `[Screenshot:`/`[Video:` placeholders left (§5 step 7) |
 | Publish gate | demo-org binding (allowlist) + PII/secret scan + HTML sanitize — MANDATORY before POST |
 | Creds (env-var-first) | `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` / `ZOHO_REFRESH_TOKEN` → `$MOTHY_STATE_DIR` → `~/.mothy/.state/zoho-creds.json` (tokens cache `~/.mothy/.state/zoho-tokens.json`) |
