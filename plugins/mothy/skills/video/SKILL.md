@@ -276,7 +276,7 @@ Ask via AskUserQuestion: "Use C-130 Maintenance Foundations + the External Power
 
   | account (email) | password source | environment | org / product_line | notes |
   |---|---|---|---|---|
-  | `buyer-demo@meridianhealth.test` | `COMMANDIQ_ORGADMIN_CAPTURE_PASSWORD` env var | local → iicwt dev | Apex Aerospace MRO · `strategic` | **PRIMARY demo login** — full seeded data (course, learners, positions/career-map, SCORM/HIPAA, compliance). `role=instructor`, `org_role=admin`. Display name "Elena Marchetti". |
+  | `buyer-demo@meridianhealth.test` | `COMMANDIQ_ADMIN_CAPTURE_PASSWORD` env var | local → iicwt dev | Apex Aerospace MRO · `strategic` | **PRIMARY demo login** — full seeded data (course, learners, positions/career-map, SCORM/HIPAA, compliance). `role=instructor`, `org_role=admin`. Display name "Elena Marchetti". |
   | `ciq-demo@commandiq.test` | `COMMANDIQ_SUPERADMIN_CAPTURE_PASSWORD` env var | local → iicwt dev | Apex Aerospace MRO · `strategic` | Fallback demo login. `role=instructor`, `org_role=admin`, `is_super_admin=true` (can navigate all demo orgs). Wired to the same seeded org as buyer-demo. |
 
   - The org id is `d0000000-0000-4000-a000-000000000001` (the seed's original "Meridian Health Systems" org, later renamed "Apex Aerospace MRO"; slug `apex-aerospace-mro-buyer-demo`). It carries the `.ciq-seed.mjs` + `.ciq-seed2.mjs` demo content.
