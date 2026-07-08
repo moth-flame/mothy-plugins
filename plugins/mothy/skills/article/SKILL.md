@@ -131,6 +131,12 @@ Desk.articles.ALL,Desk.settings.ALL,Desk.basic.READ,Desk.search.READ
   - `permission` = `config.article.zoho.permission` — the **all/everyone** value so the article is available to ALL users (not just signed-in users or agents). Confirm the exact enum string against the live API response.
   - `status` = `"Draft"` (`config.article.zoho.status`) — never auto-publish.
 
+  **Zoho article permission enum (2026-07-08 — verified LIVE).** The article `permission` field controls WHO may view the article:
+  - `ALL` = public / anyone (anonymous visitors can view). This is the **default** for normal help articles and the usual value of `config.article.zoho.permission`.
+  - **logged-in / registered-users-only** — the Desk API **accepts `REGISTERED_USERS` (WITH underscore) on input**, but **stores and returns it as `REGISTEREDUSERS` (NO underscore).** So PATCH/POST with `"permission":"REGISTERED_USERS"`, but when you re-GET to VERIFY, assert the STORED value is `"REGISTEREDUSERS"` — **verify by the STORED form, not the input form, or the check falsely fails.** Plain `"REGISTERED"` is **REJECTED**.
+  - `AGENTS` = Zoho Desk agents only. `SPECIFIED`/`DEPARTMENT` = specific users/departments.
+  - **When to restrict:** default public help/marketing articles stay `ALL` (`config.article.zoho.permission`). Set `REGISTERED_USERS` only for articles that should be gated behind portal login — admin/settings/internal-facing content, or any article Rich flags as logged-in-only. Changing permission does **NOT** change `status` (stays Published/Draft) or the permalink — it only changes WHO can view. (The mothy pipeline's `normalizeZohoPermission` / `zohoPermissionMatches` helpers in `lib/zoho-desk-kb.mjs` encode this input↔stored asymmetry so a restricted-visibility path round-trips + verifies correctly.)
+
 **Image handling — embed base64 `data:` URIs inline (do NOT upload to Zoho).** The Zoho article image/attachment upload API **404s with this token** — do not call it. Instead, base64-encode each per-step PNG and embed it directly in the HTML answer:
 ```html
 <img src="data:image/png;base64,iVBORw0KGgo…" alt="Step N — <description>"/>
@@ -228,7 +234,7 @@ DON'T:
 - Don't build an article from an org NOT in `config.seed.demoOrgAllowlist` — HARD STOP.
 - Don't call the Zoho image-upload API (404s with this token) — embed base64 `data:` URIs inline instead.
 - Don't try to create a root category (403) — reuse the configured one and create only a section.
-- Don't restrict the article to signed-in users / agents — permission is **all/everyone** per config.
+- Default permission is **`ALL`** (public) per `config.article.zoho.permission` — don't gate a public help article behind login without reason. Admin/settings/internal-facing articles, or any article Rich flags, get **`REGISTERED_USERS`** (logged-in only); input `REGISTERED_USERS`, verify stored value `REGISTEREDUSERS` (see §3 permission-enum quirk). Don't use `AGENTS`/`SPECIFIED` unless explicitly asked.
 - Don't skip a step's screenshot — every click/type step gets its own image + instruction (no orphan images, no instruction-only steps, no `[Screenshot: ...]` placeholder text left in the shipped HTML).
 - Don't hot-link the scratchpad path in the HTML — the answer must render standalone from its own inline images.
 - Don't embed an unlisted Vimeo video without its `?h=<HASH>` in the player src — it renders BLANK (§4; 2026-07-02 incident).
@@ -250,6 +256,7 @@ DON'T:
 | List categories | `GET /api/v1/kbRootCategories` |
 | Create SECTION only | `POST` categories endpoint, `name` + `parentCategoryId` (root-category create 403s) |
 | Create article | `POST /api/v1/articles` → `{categoryId(section), title, answer(HTML), permission(config), status:"Draft"}` |
+| Permission enum | `ALL`=public (default). Registered-only: input **`REGISTERED_USERS`** (underscore), stored/returned as **`REGISTEREDUSERS`** (no underscore) — verify by the STORED form. `REGISTERED` rejected. `AGENTS`/`SPECIFIED`/`DEPARTMENT` = agents/specific. Restricting doesn't change status/permalink. |
 | Images | Embed inline base64 `data:image/...` URIs (Zoho upload API 404s); review rendered Draft, fallback = paste via web editor |
 | Video embed | INLINE Vimeo `<iframe>` player at top, src `player.vimeo.com/video/<id>?h=<HASH>` — the `?h=<HASH>` is MANDATORY for unlisted videos or it renders blank (2026-07-02 incident). Verify `privacy.embed=public`. oEmbed `https://vimeo.com/api/oembed.json` to resolve; click-to-open poster is a LAST-resort fallback only |
 | Post-write verification | **Mandatory** — re-`GET` the article, assert every `<img src>` starts with `data:image/`, iframe src carries `?h=`, zero `[Screenshot:`/`[Video:` placeholders left (§5 step 7) |
