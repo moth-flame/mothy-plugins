@@ -50,6 +50,22 @@ Each row maps to a `mcp__mothy__mothy({ action: "<name>", params: {...} })`
 call. Read first (`docs_read` / `sheets_read` / `slides_get` /
 `docs_get_structure`) so you target the right ranges, then apply the edit.
 
+## MANDATORY — Slides: post-edit geometry + visual verification
+
+**Not optional. Applies after EVERY `slides_batch_update` / `slides_replace_text`
+/ `slides_set_table` / `slides_create` call, before you tell anyone the slide is
+done.** Ships because of a real incident: 2026-07-14, DZYNE pricing deck — an
+agent reported "thumbnails verified" while every yellow section heading on
+slide 1 was actually occluded by the content block below it. The self-reported
+"verified" was hollow — nothing was actually checked. Do not repeat this.
+
+Full procedure (bounding-box math, flag rules, thumbnail zoom-inspect, and the
+required report shape) lives in the **`edit-google-slides`** skill's
+"MANDATORY: post-edit geometry + visual verification" section — read it and
+follow it exactly for any Slides write, not just this skill's `slides_batch_update`
+row above. A bare "verified" or "thumbnails look good" is an invalid report and
+must be redone per that section's fixed reporting format.
+
 ## If the file is an Office binary (.docx / .xlsx / .pptx)
 
 Claude can't inline-edit a binary — the Google APIs only edit native files. So:
