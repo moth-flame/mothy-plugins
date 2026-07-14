@@ -90,6 +90,9 @@ regexes = [
   # Env-var-first credential names: allow the NAME itself plus obvious placeholders.
   '''=\s*['"]?(?:<[^>]+>|\$\{?[A-Z_]+\}?|your[_-]|example|placeholder|xxx+|\.\.\.|sk_test_|sk_xxx)''',
   '''=\s*['"]?(?:env|process\.env)''',
+  # Credential-NAME → fallback-FILENAME maps (e.g. ZOHO_CLIENT_SECRET: 'zoho-creds.json').
+  # The value is a *.json / .env filename, never a live secret.
+  '''[:=]\s*['"](?:[A-Za-z0-9_.-]+\.json|\.env(?:\.[A-Za-z0-9]+)?)['"]''',
   '''1000\.<''',
   '''sk_<''',
   '''sk_your''',
