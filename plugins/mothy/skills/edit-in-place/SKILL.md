@@ -59,12 +59,16 @@ agent reported "thumbnails verified" while every yellow section heading on
 slide 1 was actually occluded by the content block below it. The self-reported
 "verified" was hollow — nothing was actually checked. Do not repeat this.
 
-Full procedure (bounding-box math, flag rules, thumbnail zoom-inspect, and the
-required report shape) lives in the **`edit-google-slides`** skill's
+Full procedure (bounding-box math, flag rules — (a) overlaps, (b) off-slide,
+(c) tight gaps, (d) near-edge crowding within ~15pt of any slide edge (added
+2026-07-14, commandiq coord `2026-07-14-fb3bb8`) — thumbnail zoom-inspect, and
+the required report shape) lives in the **`edit-google-slides`** skill's
 "MANDATORY: post-edit geometry + visual verification" section — read it and
 follow it exactly for any Slides write, not just this skill's `slides_batch_update`
 row above. A bare "verified" or "thumbnails look good" is an invalid report and
-must be redone per that section's fixed reporting format.
+must be redone per that section's fixed reporting format. An intentional
+full-bleed element may be whitelisted against rule (d), but the whitelist
+decision must be stated explicitly in the report — never silent.
 
 ## If the file is an Office binary (.docx / .xlsx / .pptx)
 
