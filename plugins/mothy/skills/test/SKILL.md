@@ -1,16 +1,14 @@
 ---
 name: test
-description: Deliberate test-authoring + test-auditing executor. Builds a coverage matrix across spec / mock-boundary / adversarial-input / cross-tenant lenses, writes red-green-proven tests in parallel, then ADVERSARIALLY AUDITS the tests themselves (do they fail on a broken impl? do they assert the spec or just restate the buggy impl? do they mock away the boundary where the bug actually lives?), runs mutation probes, escalates the highest-value real-boundary test that mocks can't cover, and gates on no-new-failures-vs-floor. Use when the user invokes /test <target>, says "test this", "write tests for X", "are these tests any good", "audit the test coverage", "what would these tests miss", "make sure this actually works", or wants test coverage that finds what casual testing misses. Sibling to /build, /plan, /fix — same orchestration spine; its job is to make a green suite MEAN something.
+description: Deliberate test-authoring + test-auditing executor. Builds a coverage matrix across spec / mock-boundary / adversarial-input / cross-tenant lenses, writes red-green-proven tests in parallel, then ADVERSARIALLY AUDITS the tests themselves (do they fail on a broken impl? do they assert the spec or just restate the buggy impl? do they mock away the boundary where the bug actually lives?), runs mutation probes, escalates the highest-value real-boundary test that mocks can't cover, and gates on no-new-failures-vs-floor. Detects the repo's own test command instead of assuming one. Use when the user invokes /test <target>, says "test this", "write tests for X", "are these tests any good", "audit the test coverage", "what would these tests miss", "make sure this actually works", or wants test coverage that finds what casual testing misses. Sibling to /build, /plan, /fix — same orchestration spine; its job is to make a green suite MEAN something.
 metadata: { "openclaw": { "emoji": "🧪" } }
 ---
 
 # test — Deliberate test-authoring + test-auditing protocol
 
-> **v1 (2026-06):** /test is the sibling that distrusts a green suite. /build and /fix adversarially verify the *code*; /test adversarially audits the *tests*. The thesis: **a passing test proves nothing unless (a) it would FAIL on a broken implementation, and (b) it exercises the boundary where bugs actually live.** Most test suites are green theater — they mock away the exact seam (DB constraint, RLS, env, trigger, concurrency, auth) where real defects hide, and they assert the implementation's current behavior (including its bugs) rather than the spec. This skill exists to break that.
+> **What this skill is:** the sibling that distrusts a green suite. /build and /fix adversarially verify the *code*; /test adversarially audits the *tests*. The thesis: **a passing test proves nothing unless (a) it would FAIL on a broken implementation, and (b) it exercises the boundary where bugs actually live.** Most test suites are green theater — they mock away the exact seam (DB constraint, access policy, env, trigger, concurrency, auth) where real defects hide, and they assert the implementation's current behavior (including its bugs) rather than the spec. This skill exists to break that.
 >
-> **v1 — ultra caveman mode mandatory** for ALL sub-agent free-text (§0.5). Cuts agent output tokens ~75%. Schemas/code/test-source/errors stay exact.
->
-> **v1 — durability & resume mandatory** (§0.6 + §10). Runs in a detached, resumable background Workflow; the test files themselves + a state file are the journal.
+> **Repo-agnostic and OS-agnostic.** It detects the repo's test command and conventions rather than assuming them, and uses repo-relative paths only. It works on Windows, macOS, and Linux, in a repo with no `CLAUDE.md`, no `AGENTS.md`, no `docs/` directory, and no browser test setup.
 
 ## The five principles (the whole skill in one screen)
 
@@ -20,9 +18,59 @@ metadata: { "openclaw": { "emoji": "🧪" } }
 4. **Adversarial + cross-tenant inputs, not the happy path.** Foreign credential → zero rows / 403. Null, empty, malformed, concurrent, oversized, wrong-tenant. The error and security paths are where the unverified behavior is. (Catches T-04.)
 5. **Audit the auditor.** Automated checkers (verifiers, regression bots, static scans) lie — they grep the wrong file, diff a stale tree, or call a known-failure "new." Spot-check every machine verdict (pass *or* fail) against ground truth on disk / in the DB before trusting it. (Catches T-09; learned the hard way.)
 
-## §0.5 — Ultra caveman mode for sub-agents (MANDATORY)
+## §0.1 — Repo conventions: detect, do not assume
 
-Every `agent(...)` prompt this skill spawns MUST prepend the `CAVEMAN_ULTRA` preamble. Caveman applies to prose fields only (`reasoning`, `evidence`, `gap`, `rationale`, `red_proof`, `green_proof`, `mutation`, `suggested_test`). Code, test source, file paths, enum values, schema field names, error strings: NEVER cavemanized.
+**Use repo-relative paths only** (`tests/`, `spec/`, `src/`) — never absolute
+paths, never an OS-specific path — so the same instructions run identically on
+any machine.
+
+1. **Find the target repo root** — `git -C <dir-of-the-target-files> rev-parse --show-toplevel`. That root, NOT the shell's working directory, is the target.
+2. **Read these files if present:** `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, `README.md`, and anything they point at. **Their rules OVERRIDE this skill wherever they conflict** — especially the test harness, test-file layout, and the known failure floor.
+3. **These files are OPTIONAL and their absence is normal.** Do not refuse, do not ask the user to create them, and do not import another project's conventions in their place.
+
+Match the harness the repo already uses — an existing `tests/` tree, `test/`,
+`spec/`, or co-located `*.test.*` / `*_test.go` / `test_*.py`. **Do not introduce
+a new test runner.**
+
+## §0.2 — Test command detection (NEVER hardcode a test command)
+
+Resolve the command to run, in this order, and **state which source you used**:
+
+a. **An explicit command the user gave** — always wins.
+b. **The repo's own docs** — `CLAUDE.md`, `CONTRIBUTING.md`, or `README.md` if any of them names a test or regression command.
+c. **`package.json` `scripts`** — prefer `test:unit`, else `test`, else an unambiguously-named runner script. Package manager from the lockfile: `pnpm-lock.yaml` → `pnpm run <script>`; `yarn.lock` → `yarn <script>`; `package-lock.json` or none → `npm run <script>`.
+d. **Language-native default** for whatever manifest is present: `pytest` (`pyproject.toml` / `setup.cfg` / `requirements.txt`) · `go test ./...` (`go.mod`) · `cargo test` (`Cargo.toml`) · `dotnet test` (`*.sln` / `*.csproj`) · `bundle exec rspec` (`Gemfile` + `spec/`) · `mvn test` / `gradle test` · `node --test` (Node repo with tests but no script).
+e. **If none of the above determines a command, ASK the user.** Never guess a command, and never report a suite as green when nothing actually ran.
+
+**Browser / E2E verification is CONDITIONAL.** Run a Playwright / Cypress /
+Selenium pass **only if the repo actually has that setup** — a config file, the
+dependency installed, and a script or spec directory. If it does not, **skip
+that step and say explicitly that it was skipped**, and rely on the other
+layers. A missing browser gate must never block, error, or be reported as a
+failure. Never author a spec for a browser runner the repo doesn't have
+installed.
+
+## §0.3 — Orchestration shape (preferred, with a plain fallback)
+
+**Preferred when the harness supports it:** run the phases as a detached
+background workflow with parallel sub-agents — one author agent per disjoint
+test area, resumable, surviving a dropped connection.
+
+**Fallback when it does not:** run the same phases **sequentially in one
+session** — coverage matrix → author → audit → real-boundary + regression.
+Every guarantee survives: red-green proof per test, the test-critic never told
+the suite is green, bounded rework rounds, floor-based regression. **Nothing
+here requires a Workflow or Task tool.**
+
+**Model tiering by role, not by name:** use a cheap/fast tier for authoring
+tests to a stated matrix row and for running suites, and a stronger/expensive
+tier for the adversarial test-audit and the escalation call. Do not assume a
+particular model is available; if only one tier exists, run everything there and
+say so.
+
+## §0.4 — Compact sub-agent output (recommended)
+
+Prepend the `CAVEMAN_ULTRA` preamble to sub-agent prompts. It applies to prose fields only (`reasoning`, `evidence`, `gap`, `rationale`, `red_proof`, `green_proof`, `mutation`, `suggested_test`). Code, test source, file paths, enum values, schema field names, error strings: NEVER compressed.
 
 ```js
 const CAVEMAN_ULTRA = `
@@ -33,9 +81,20 @@ Pattern: [thing] [action] [reason]. [next].
 `
 ```
 
-## §0.6 — Durability & resume (MANDATORY)
+## §0.5 — Durability & resume (useful, optional, degrades gracefully)
 
-The test files are the durable artifact (like git is for /build). Maintain a state file `docs/drafts/<YYYY-MM-DD>_<TARGET>-test-state.md` (or `./.test-state/` if no `docs/`): the target under test, the coverage matrix, each test-area → `pending | written <path> | audited <verdict> | escalated <reason>`, the Workflow `runId` + `scriptPath` + resume command, and the regression floor. Write it at dispatch; update per area. On resume: read the state file + the test files already on disk; only author/audit areas not yet done. Re-run the cached Workflow (`Workflow({scriptPath, resumeFromRunId})`) — completed agents return cached results.
+**The test files on disk are the durable artifact** (as git commits are for
+/build) — that guarantee needs no extra files. Optionally keep a state ledger
+alongside them: the target under test, the coverage matrix, each test-area →
+`pending | written <path> | audited <verdict> | escalated <reason>`, a resume
+pointer if the harness gave you one, and the regression floor. Put it wherever
+the repo already keeps working notes; if the repo has no such convention, keep
+it in your working notes. **Never create a doc tree the repo doesn't use, and
+never stall because a directory is absent.**
+
+On resume: read the test files already on disk (plus the ledger if you kept
+one); only author/audit areas not yet done. If the harness offers a resume
+handle, replay it — completed agents return cached results.
 
 ## When to use
 
@@ -89,7 +148,11 @@ Fan out one agent per matrix area (parallel; disjoint test files so no collision
 4. **Deterministic** — no real clock/random/network/order dependence; inject them. A flaky test is worse than no test (T-08).
 5. **Expected-from-spec** — the assertion's expected value traces to the matrix `source_of_expected`, not to a value read back from the code.
 
-Repo test commands are CWD-aware (mirror /build): Vitest (`npm run test:unit` / `npx vitest run <file>`), Playwright (`npx playwright test <file>` — static source-scan specs for surfaces jsdom can't render), `node --test`, etc. Match the repo's existing harness; do not introduce a new test runner.
+Run tests with the command detected in §0.2 — **never a hardcoded one**, and
+never a runner the repo doesn't have installed. Match the repo's existing
+harness and test-file layout. Author browser specs only if the repo already has
+a browser runner (§0.2); otherwise cover what you can at the layers that exist
+and say the browser layer is absent.
 
 ### 4. Adversarially AUDIT the tests (THE differentiator — MANDATORY for non-trivial)
 
@@ -134,7 +197,11 @@ From the matrix's `layer: integration | live` rows, identify the **single highes
 
 ### 7. Floor-based regression + report
 
-Run the full suite. Separate **new** failures from the **pre-existing / environmental floor** (record the floor count + bucket names; a dep missing from `node_modules`, a flaky external, a known-broken module are floor, not your regression). Gate = **no new failures vs floor**, not zero failures (T-10). Report:
+Run the full suite with the command detected in §0.2. Separate **new** failures
+from the **pre-existing / environmental floor** (record the floor count + bucket
+names; a missing local dependency, a flaky external, a known-broken module are
+floor, not your regression). Gate = **no new failures vs floor**, not zero
+failures (T-10). Report:
 - Coverage matrix → which rows are covered, at which layer, which are `live`/escalated.
 - Tests added (paths + count) + red-green proof.
 - Audit verdicts (T-classes found + fixed; surviving mutations, if any).
@@ -142,11 +209,22 @@ Run the full suite. Separate **new** failures from the **pre-existing / environm
 - Regression: floor vs new.
 - **Honest residual risk**: the boundaries still unproven and the one test that would close the biggest gap.
 
-### 8. Commit (only if the user asked; never push)
+### 8. Commit locally if the user asked; ask before pushing
 
-Mirror /build §8: explicit file names (never `git add -A`, never `.DS_Store`), Conventional Commits, co-author line, **no push**. A test that found a bug commits with the failing test marked (`.todo`/`.fails` per the repo convention) or hands the bug to /fix — never commit a silently-passing test over a known defect.
+Mirror /build §8: follow the repo's own conventions, stage explicit file names
+(never `git add -A`, so scratch files and editor artifacts can't ride along),
+match the existing commit-message style, add a co-author trailer if the repo
+uses one. **Default: commit locally and stop — do NOT push, open a PR, or
+deploy unless the user has already told you to.** A test that found a bug
+commits with the failing test marked (`.todo` / `.fails` / `skip` per the repo's
+convention) or hands the bug to /fix — never commit a silently-passing test over
+a known defect.
 
-## Workflow tool boilerplate
+## Orchestration boilerplate (illustrative)
+
+Illustrative, not required — run the same phases sequentially if the harness has
+no parallel sub-agents (§0.3). `TEST_CMD` comes from the §0.2 detection, never
+from a literal.
 
 ```js
 export const meta = {
@@ -154,6 +232,9 @@ export const meta = {
   description: 'Coverage-matrix → red-green tests → adversarial test-audit → mutation probe → real-boundary smoke for <target>',
   phases: [{ title: 'Coverage matrix' }, { title: 'Author' }, { title: 'Audit' }, { title: 'Real-boundary + regression' }]
 }
+
+// Detected per §0.2 — NEVER a hardcoded literal. E2E_CMD may be null.
+const { TEST_CMD, E2E_CMD } = detectTestCommands(REPO_ROOT)
 
 // Schemas
 const MATRIX_SCHEMA = { type:'object', required:['areas'], properties:{ areas:{ type:'array', items:{
@@ -185,7 +266,7 @@ const matrix = await agent(`${CAVEMAN_ULTRA}\n\n${BRIEF}\n\nBuild the coverage m
 phase('Author')
 // one area per disjoint test file; red-green proven
 const written = await parallel(groupAreas(matrix.areas).map(area => () =>
-  agent(`${CAVEMAN_ULTRA}\n\n${BRIEF}\n\nWrite tests for: ${JSON.stringify(area)}\nRed-green MANDATORY: prove each fails before / passes after. Expected from the SPEC, never read back from the impl. No silent skips (// SKIP: tombstone). Deterministic.`,
+  agent(`${CAVEMAN_ULTRA}\n\n${BRIEF}\n\nWrite tests for: ${JSON.stringify(area)}\nRun with: ${TEST_CMD}. Match repo existing harness + layout; do NOT add a new runner.\nRed-green MANDATORY: prove each fails before / passes after. Expected from the SPEC, never read back from the impl. No silent skips (// SKIP: tombstone). Deterministic.`,
     { label:`author:${area.key}`, phase:'Author', schema:TEST_SCHEMA }))
 
 phase('Audit')
@@ -196,7 +277,7 @@ const audits = await parallel(written.filter(Boolean).map(t => () =>
 // rework areas with any high+ finding, bounded 3 rounds (see §4)
 
 phase('Real-boundary + regression')
-const real = await agent(`${CAVEMAN_ULTRA}\n\n${BRIEF}\n\nFrom the matrix layer=live|integration rows pick the HIGHEST-value test mocks cannot cover. EXECUTE it against the real substrate (real/dev DB or a deployed preview with real auth): hit the actual boundary, assert the real-DB row / RLS denial / status, then CLEAN UP. If infra is missing, output the exact command to run + which boundaries stay unproven. Then run the full suite; separate NEW failures from the pre-existing/environmental floor. Report floor vs new.`,
+const real = await agent(`${CAVEMAN_ULTRA}\n\n${BRIEF}\n\nFrom the matrix layer=live|integration rows pick the HIGHEST-value test mocks cannot cover. EXECUTE it against the real substrate (real/dev DB or a deployed preview with real auth): hit the actual boundary, assert the real row / policy denial / status, then CLEAN UP. If infra is missing, output the exact command to run + which boundaries stay unproven. Then run the full suite with: ${TEST_CMD}. Separate NEW failures from the pre-existing/environmental floor. Report floor vs new.`,
   { label:'real+regression', phase:'Real-boundary + regression', schema:{ type:'object', required:['live_result','floor','new_failures','unproven_boundaries'], properties:{ live_result:{type:'string'}, floor:{type:'number'}, new_failures:{type:'array',items:{type:'string'}}, unproven_boundaries:{type:'array',items:{type:'string'}} } } })
 
 return { matrix, written, audits, real }
@@ -204,9 +285,12 @@ return { matrix, written, audits, real }
 
 ## Rules
 
-- **Ultra caveman** for every sub-agent prompt (§0.5). Code/test-source/errors/schemas exact.
-- **Test it like a real user — live render, not just source-scan (MANDATORY for any UI).** A static Playwright spec that greps source for patterns is NOT testing a UI; it passes while the surface is visually broken. For any user-facing change, `/test` MUST include a live pass: start the app, log in, walk the actual user flow (and the negative/gating cases), screenshot every state, and judge layout/contrast/chrome/polish/tooltips/first-time-viewer clarity from the rendered pixels. Static specs are a supplement, never the whole job. (Cost of skipping this: a green static suite shipped a bare-dark-page UI and wasted Rich's time.)
-- **Delegate ALL execution, not just authoring (orchestrator-only, hard rule).** The main thread does NOT run the app, drive a browser/Playwright, run suites, execute DB/SQL scripts, or take screenshots itself. It dispatches a sub-agent to do that and to SAVE screenshots to files; the main thread only writes briefs, Reads the saved screenshots, judges them, and decides. The "look with your own eyes" judgment is the main thread's; the *driving* is the sub-agent's. If you're about to open a terminal to "just check," dispatch it instead.
+- **Compact sub-agent output** (§0.4). Code/test-source/errors/schemas exact.
+- **Detect, don't assume** (§0.1). Read the repo's `CLAUDE.md` / `AGENTS.md` / `CONTRIBUTING.md` / `README.md` **if present**; their rules override this skill. Their absence is normal.
+- **Never hardcode a test command** (§0.2). If it can't be detected, ask. Never report a suite as green when nothing ran.
+- **Repo-relative paths only.** No absolute paths, no OS assumptions — this runs on Windows too.
+- **Test it like a real user — live render, not just source-scan — when the repo has a browser setup and the change is user-facing.** A static spec that greps source for patterns is NOT testing a UI; it passes while the surface is visually broken. When a browser runner exists, include a live pass: start the app, log in, walk the actual user flow (and the negative/gating cases), screenshot every state, and judge layout/contrast/chrome/polish/first-time-viewer clarity from the rendered pixels. Static specs are a supplement, never the whole job. If the repo has **no** browser test setup, skip this and say so — never author specs for a runner the repo doesn't have.
+- **Delegate execution where sub-agents exist.** Prefer having a sub-agent run the app, drive a browser, run suites, execute scripts, and SAVE screenshots to files; you write the briefs, read the saved screenshots, judge them, and decide. The "look with your own eyes" judgment is yours; the driving is the agent's. If no sub-agent mechanism is available, do it yourself sequentially (§0.3) — the discipline, not the delegation, is what matters.
 - **Red-green or it doesn't count.** Every authored test is observed failing before it passes. A never-failed test is unproven.
 - **Expected from the spec, never the impl** (T-02). If you must derive expected from behavior, you are writing a change-detector, not a test — say so.
 - **Audit the tests adversarially** (§4). The critic's null hypothesis is "this suite is theater." It never uses "green" as evidence.
@@ -215,9 +299,9 @@ return { matrix, written, audits, real }
 - **Cross-tenant matrix is mandatory** for any org/anon/multi-user surface: foreign cred → zero / 403.
 - **Floor-based regression** (§7): gate is no-NEW-failures, after separating the pre-existing/environmental floor.
 - **Audit the auditor** (§5 principle, T-09): spot-check every machine verdict — verifier, regression bot, static scan — against ground truth on disk / in the DB. They produce false negatives (wrong-dir grep, stale diff) and false "new failures" (the floor).
-- **Durable & resumable** (§0.6 + §10): background Workflow, the test files + state file are the journal, resume re-runs only undone areas.
-- **No push.** Commit only if asked, explicit files. A test that found a bug hands off to /fix; never commit a passing test over a known defect.
-- **Read the repo's CLAUDE.md / test conventions** before writing — match the harness, the file layout, the floor.
+- **Durable & resumable where possible** (§0.5): the test files on disk are the journal; the state ledger is optional and degrades gracefully; resume re-runs only undone areas.
+- **Commit locally if asked; ask before pushing.** Explicit file names. A test that found a bug hands off to /fix; never commit a passing test over a known defect.
+- **Match the repo's harness, file layout, and known failure floor** before writing — read its conventions if it documents any, and follow the existing tests if it doesn't.
 
 ## Anti-patterns
 

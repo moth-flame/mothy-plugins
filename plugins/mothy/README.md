@@ -86,16 +86,39 @@ name them:
 | **test** *(engineering)* | Writing red-green tests then adversarially auditing them (would they catch a broken impl?) | "test this", "write tests for X", "are these tests any good", "make sure this actually works", "/test" |
 | **fix** *(engineering)* | Reproduce a bug as a failing test, root-cause it, apply the smallest fix, verify no regression | "this is broken", "debug and fix", "track down and fix", "/fix" |
 
-The four **engineering skills** (plan → build → test → fix) bring the same
-multi-role sub-agent orchestration the Moth+Flame team uses in Claude Code to
-**Cowork and the desktop app**: the main thread stays a conductor and fans work
-out to focused sub-agents (independent role-based planners; parallel build+test;
-adversarial impl-verifiers + test-auditors; read-only diagnosis scouts). Like
-every skill here they **auto-fire on intent** — you don't have to type the slash
-command; describing the work ("plan this", "build it", "this is broken", "make
-sure it actually works") is enough. Orchestration uses whatever sub-agent
-mechanism the surface provides (the Workflow/Task tools in Claude Code; Cowork's
-native sub-agents) — the same pattern the shipped `video` skill already runs.
+The four **engineering skills** (plan → build → test → fix) bring multi-role
+sub-agent orchestration to your own work: the main thread stays a conductor and
+fans work out to focused sub-agents (independent role-based planners; parallel
+build+test; adversarial impl-verifiers + test-auditors; read-only diagnosis
+scouts). Like every skill here they **auto-fire on intent** — you don't have to
+type the slash command; describing the work ("plan this", "build it", "this is
+broken", "make sure it actually works") is enough.
+
+**They are repo-agnostic, OS-agnostic, and self-configuring** (since v0.4.0):
+
+- **They auto-detect your test command** rather than assuming one — an explicit
+  command you give wins, then whatever your `CLAUDE.md` / `CONTRIBUTING.md` /
+  `README.md` names, then `package.json` scripts (`test:unit`, else `test`, with
+  the package manager picked from your lockfile), then a language-native default
+  (`pytest`, `go test ./...`, `cargo test`, `dotnet test`, `bundle exec rspec`,
+  `mvn`/`gradle`, `node --test`). If none can be determined they **ask** instead
+  of guessing.
+- **Browser/E2E verification is conditional** — a Playwright/Cypress/Selenium
+  pass runs only if your repo actually has that setup. If it doesn't, the step is
+  skipped and reported as skipped; a missing browser gate never blocks or errors.
+- **Repo conventions are detected, not assumed.** `CLAUDE.md`, `AGENTS.md`,
+  `CONTRIBUTING.md`, and `README.md` are read **if present** and their rules
+  override the skill. All of them are optional — their absence is normal and is
+  not an error. Fix-log / changelog / ADR conventions are followed if your repo
+  has one; otherwise the write-up goes in the commit message body.
+- **Repo-relative paths only, so they work on Windows** as well as macOS/Linux.
+- **They commit locally and ask before pushing** — no push, PR, deploy, or
+  migration against shared infrastructure unless you've said so.
+- **Orchestration degrades gracefully.** Parallel background sub-agents are the
+  preferred shape where the surface provides them (the Workflow/Task tools in
+  Claude Code; Cowork's native sub-agents), but every skill runs end to end
+  sequentially without them — the methodology (reproduce-first, red-green TDD,
+  verifier isolation, bounded rework, the closed rubrics) is preserved either way.
 
 ## Support matrix
 

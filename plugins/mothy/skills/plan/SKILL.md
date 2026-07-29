@@ -1,18 +1,82 @@
 ---
 name: plan
-description: Multi-role independent planning then synthesis. Spawn parallel sub-agents one per relevant role (architecture, product, discovery, ux-designer, security, build, test, etc. — pick from AGENTS.md responsibilities), each plans the task independently with a shared brief, then synthesize their plans into a final unified plan. Use when the user invokes /plan <topic>, or says "plan this", "have a team plan this", "get a panel to think about this", "spawn a roundtable". For comprehensive design decisions where multiple lenses add signal. Pair with /build to execute the plan.
+description: Multi-role independent planning then synthesis. Spawn parallel sub-agents one per relevant role (architecture, product, discovery, design/UX, security, build, test, etc.), each plans the task independently with a shared brief, then synthesize their plans into a final unified plan. Use when the user invokes /plan <topic>, or says "plan this", "have a team plan this", "get a panel to think about this", "spawn a roundtable". For comprehensive design decisions where multiple lenses add signal. Pair with /build to execute the plan.
 metadata: { "openclaw": { "emoji": "🧠" } }
 ---
 
 # plan — Multi-role planning protocol
 
-> **v1.1 (2026-06-08):** ultra caveman mode mandatory for ALL sub-agent free-text. Cuts agent output tokens ~75%. Schemas/file paths/enums stay exact (see §0.5).
->
-> **v1.2 (2026-06-08):** durability & resume mandatory (§0.6). Squad runs in a detached, resumable background Workflow; a handoff file is written at dispatch time (not at synthesis) so a dropped connection or cold restart picks up seamlessly. Decisions from AskUserQuestion are persisted, not left in the transcript.
+> **Repo-agnostic and OS-agnostic.** Nothing here assumes a particular project
+> layout, operating system, absolute path, or role registry. It reads the repo's
+> own conventions **if present** and falls back to sensible generic defaults
+> otherwise. It works on Windows, macOS, and Linux, in a repo with no
+> `CLAUDE.md`, no `AGENTS.md`, and no `docs/` directory.
 
-## §0.5 — Ultra caveman mode for sub-agents (MANDATORY)
+## §0.1 — Repo conventions: detect, do not assume
 
-Every `agent(...)` prompt this skill spawns MUST prepend the `CAVEMAN_ULTRA` preamble. Caveman applies to prose fields only: `tldr`, `reasoning`, `design`, `step`, `rationale`, `risk`, `mitigation`, `success_criteria` entries, `open_questions` entries, `priority_reorder`. Enums, file paths, numbers, schema field names stay exact.
+**Use repo-relative paths only** — never absolute paths.
+
+Before building the brief, read these files **if present**: `CLAUDE.md`,
+`AGENTS.md`, `CONTRIBUTING.md`, `README.md`, and anything they point at. **Their
+rules OVERRIDE this skill wherever they conflict**, and their contents belong in
+the shared brief (§3) so the squad plans within the real constraints.
+
+**These files are OPTIONAL and their absence is normal.** A repo with none of
+them is not misconfigured — do not refuse, do not ask the user to create them,
+and do not import another project's conventions in their place.
+
+| Thing the plan needs | Detect from | Fallback when absent |
+|---|---|---|
+| **role map** | `AGENTS.md` if present | the plain roles in §2 |
+| **test / regression command** (so the plan's steps are runnable) | §0.2 detection order | ask the user, or state the plan assumes an unknown command |
+| **planning-artifact location** | a drafts/planning convention named in the repo's docs | keep the plan in the conversation, or write it wherever the user asks; never invent a doc tree the repo doesn't use |
+| **hard rules** (protected files, review gates, commit policy) | the repo's docs | secrets are protected; commit locally and ask before pushing |
+
+## §0.2 — Test command detection (never hardcode one in a plan)
+
+When a plan step says "run the tests," name the command the repo actually uses.
+Resolve it in this order and state which source you used:
+
+a. **An explicit command the user gave** — always wins.
+b. **The repo's own docs** — `CLAUDE.md`, `CONTRIBUTING.md`, `README.md`.
+c. **`package.json` `scripts`** — prefer `test:unit`, else `test`; package manager from the lockfile (`pnpm-lock.yaml` → `pnpm run`; `yarn.lock` → `yarn`; `package-lock.json`/none → `npm run`).
+d. **Language-native default:** `pytest` · `go test ./...` · `cargo test` · `dotnet test` · `bundle exec rspec` · `mvn test` / `gradle test` · `node --test`.
+e. **If none can be determined, ASK the user** rather than guessing.
+
+Only include a browser/E2E step if the repo actually has that setup (config +
+dependency + specs). If it doesn't, leave it out and say the plan has no browser
+verification step because the repo has no browser test setup.
+
+## §0.3 — Orchestration shape (preferred, with a plain fallback)
+
+**Preferred when the harness supports it:** run the squad as a detached
+background workflow — all role agents in parallel, resumable, surviving a
+dropped connection.
+
+**Fallback when it does not:** run the role passes **sequentially in one
+session**, each still planning *independently* — do not show a role the previous
+role's plan; that independence is the whole point. Every guarantee survives:
+independent lenses, constrained role focus, one synthesized plan at the end.
+**Nothing here requires a Workflow or Task tool.** What you lose is parallelism
+and resume-on-disconnect.
+
+**Durability is useful but optional, and degrades gracefully.** A /plan run
+spans three fragile moments: the squad fans out, the user answers clarifying
+questions, you synthesize.
+
+1. **Persist the run's state if the repo has a place for it.** If the repo uses a drafts/planning directory, write `<that-dir>/<YYYY-MM-DD>_<topic-slug>-plan.md` the moment the run starts. If it has no such convention, keep the same content in your working notes and offer to save it where the user wants. **Never create a doc tree the repo doesn't use, and never stall because a directory is absent.**
+2. **When kept, the handoff file holds:** the ask (brief, condensed) and any proposed approach being challenged; **locked decisions** — every answer the user has given, verbatim; verified current-state facts the squad was given (so a cold restart doesn't re-explore); a resume pointer if the harness gave you one; a "next step on resume" checklist.
+3. **Persist the user's answers the instant they arrive.** Clarifying answers are decisions; a transcript is not durable across a cold restart.
+4. **Resume contract.** Mid-run in the same session → resume the workflow if the harness offers it; completed agents return cached results. Cold restart → read the handoff file (or your notes), re-run or read the completed role plans, then synthesize.
+5. **On synthesis, replace the handoff content with the final plan** so it becomes a self-contained artifact `/build` can read directly. Keep the locked-decisions section.
+
+## §0.4 — Compact sub-agent output (recommended)
+
+Prepend the `CAVEMAN_ULTRA` preamble to sub-agent prompts. It applies to prose
+fields only: `tldr`, `reasoning`, `design`, `step`, `rationale`, `risk`,
+`mitigation`, `success_criteria` entries, `open_questions` entries,
+`priority_reorder`. Enums, file paths, numbers, and schema field names stay
+exact.
 
 ```js
 const CAVEMAN_ULTRA = `
@@ -25,60 +89,70 @@ YES: "New abstraction layer. Decouple X from Y. Reason: Y churn high."
 `
 ```
 
-Main agent's final synthesis (presented to Rich) stays in normal prose — caveman only for sub-agent outputs.
+Your final synthesis (presented to the user) stays in normal prose — the
+compression is for sub-agent output only.
 
-## §0.6 — Durability & resume (MANDATORY)
+## §0.5 — Model tiering (by role and relative cost, not by name)
 
-A `/plan` run spans three fragile moments: (a) the squad fans out, (b) Rich answers clarifying questions, (c) you synthesize. A dropped connection or context summarization between any two loses work unless state is on disk. Make every run survivable:
+Match the model to the job rather than to a fixed lineup:
 
-**1. Run the squad in the BACKGROUND.** The Workflow tool returns a `runId` + `scriptPath` and keeps running server-side whether or not Rich is connected; it re-invokes you on completion. Capture the `runId` and `scriptPath` from the tool result the moment it returns.
+- **Cheap/fast worker tier** — the independent role plans. Many parallel calls, each well-scoped by its focus block.
+- **Strong/expensive critic tier** — the synthesis, conflict resolution, and any adversarial review of the resulting plan. Few calls, highest leverage.
 
-**2. Write a HANDOFF FILE at dispatch time — NOT at synthesis.** Immediately after the Workflow launches, write `docs/drafts/<YYYY-MM-DD>_<TOPIC_SLUG>-plan.md` (create `docs/drafts/` if missing; if CWD has no `docs/`, use the repo's doc convention or `./.plan-state/`). It MUST contain:
-   - The ask (the brief, condensed) and any proposed approach being challenged.
-   - **Locked decisions** — every answer Rich has given (see #3). These live nowhere else durable.
-   - Verified current-state facts the squad was given (so a cold restart doesn't re-explore).
-   - **Workflow `runId` + `scriptPath` + the verbatim resume command** (see #4).
-   - A "NEXT STEP ON RESUME" checklist: check workflow status → resume if incomplete → synthesize → overwrite this file with the final plan.
+Do not assume a specific model is available. If only one tier exists, run
+everything there and say so.
 
-**3. Persist AskUserQuestion answers the instant they arrive.** Clarifying answers are decisions; the transcript is not a durable store across a cold restart. After every `AskUserQuestion`, append the question + chosen answer (verbatim, including any correction to your framing) to the handoff file's "Locked decisions" section before continuing.
+## §0.6 — LLM-call eval gate (when the plan includes an LLM call)
 
-**4. Resume contract.** On reconnect or cold restart:
-   - Same session, squad mid-run → `Workflow({scriptPath, resumeFromRunId})`. Completed agents return cached results instantly; only stragglers re-run. Same script + same args = 100% cache hit.
-   - Squad already finished → its result is in the transcript / a task-notification re-invokes you; the raw plans also persist as `agent-<id>.jsonl` in the workflow transcript dir (fallback if you must hand-author the synthesis).
-   - Cold restart (no session) → read the handoff file; it carries the ask, decisions, facts, and resume command. Re-run the cached Workflow or read the journal, then synthesize.
+If the plan introduces or changes a prompt, a worked example, a model/provider
+choice, or LLM call parameters, the plan MUST include an eval gate as a first-class
+step — not an afterthought:
 
-**5. On synthesis, OVERWRITE the handoff file with the final plan** so it becomes a self-contained `*-plan.md` that `/build` can read directly. Keep the locked-decisions and resume sections; replace the "pending" section with the ordered plan.
-
-This is cheap (one file write at dispatch + one append per question + one overwrite at synthesis) and converts a /plan run from "lose everything on disconnect" to "resume in one step."
+1. **An eval with fixtures and a runner**, built in the same work if the subsystem has none.
+2. **Ground truth INDEPENDENT of the system under test — the no-self-oracle prohibition.** Never grade a prompt's output using the same subsystem being changed. (Illustration: an eval that scores a redactor's output by re-running that same redactor stays green straight through a total redactor regression.)
+3. **Thresholds fixed BEFORE the run** — decided in the plan, not tuned afterwards to whatever the new output happens to score.
+4. **A recorded result** — metric values, fixture set, ground-truth source, threshold, pass/fail — as an acceptance criterion of the unit that ships it.
 
 ## When to use
 
-User says one of:
+The user says one of:
 - `/plan <topic>` (with topic args)
-- `/plan` alone — use most recent substantive request from conversation as topic
+- `/plan` alone — use the most recent substantive request in the conversation as the topic
 - "have a team plan this", "spawn a roundtable", "get a panel to think about X"
 
-For comprehensive design / architecture decisions where multiple role lenses each add signal. Not for simple lookups or single-step tasks.
+For comprehensive design / architecture decisions where multiple role lenses
+each add signal. Not for simple lookups or single-step tasks.
 
 ## Protocol
 
-1. **Identify task** — explicit args take priority; else use most recent substantive user request in the conversation.
+1. **Identify the task** — explicit args take priority; else use the most recent substantive user request in the conversation.
 
-2. **Pick roles from AGENTS.md** — read `/Users/rich/Documents/GitHub/Mothy/AGENTS.md` "Sub-Agents: 11 Roles" section (or the equivalent in whatever repo CWD is). Pick 5–8 roles whose responsibilities actually overlap the task. Default mix for design tasks: **architecture, product, discovery, ux-designer, security, build, test**. Add **github** when shipping requires PR planning, **validate** when correctness QA is the constraint, **docs** when knowledge artifact is the deliverable. Drop irrelevant roles — 4-role squad beats 11-role squad of bystanders.
+2. **Pick roles.** **If the repo has an `AGENTS.md` (or equivalent) role map, use it — it overrides this list.** Otherwise use these plain roles and pick the 4–8 whose lens actually overlaps the task:
+   - **architecture** — component boundaries, API contracts, data flow, diagrams, ADRs
+   - **product** — jobs-to-be-done, user-visible failure modes today, priority ranking with a defended order
+   - **discovery** — external option comparison, matrices, a recommendation
+   - **design / UX** — how the change surfaces to the user, per-surface formatting, correction flows
+   - **security** — threat model, access control/isolation, PII, prompt injection, audit trail
+   - **build** — file-by-file change list, migration, rollout phasing, rollback
+   - **test** — a failing test per move (red-green), coverage/regression metrics, a manual runbook
+   - **docs** — when a knowledge artifact is the deliverable
+   - **release** — when shipping requires PR/release planning
 
-3. **Build a shared brief** — single string that includes:
-   - Current state of the system / problem
-   - Constraints (from CLAUDE.md, AGENTS.md, repo conventions, prior conversation)
-   - Any proposed solution already on the table (with explicit invitation to challenge it)
-   - Hard rules (protected files, fix-log mandates, red-green TDD if Mothy)
+   Drop irrelevant roles: a 4-role squad of the right lenses beats a 10-role squad of bystanders.
+
+3. **Build a shared brief** — a single self-contained string that includes:
+   - Current state of the system / the problem
+   - Constraints from the repo's own docs (§0.1) and prior conversation
+   - Any proposed solution already on the table, with an explicit invitation to challenge it
+   - Hard rules that apply (protected files, review gates, red-green TDD, the detected test command from §0.2)
    - "What to return" instructions
 
-4. **Spawn parallel agents via the Workflow tool** — one agent per role, all in parallel, structured output via JSON schema. Each agent gets `${BRIEF} + ## Your role: <name> + <role-specific focus>`. Use this schema (adapt as needed):
+4. **Spawn one agent per role, all in parallel** (or sequentially and independently in the fallback), with structured output. Each agent gets `${BRIEF} + ## Your role: <name> + <role-specific focus>`. Suggested schema:
 
 ```js
 // Fibonacci complexity scale — NOT days.
-// You don't work in days; you only know what a human team typically takes.
-// Story points convey perceived complexity, which is the signal Rich actually wants.
+// Story points convey perceived complexity, which is the signal that survives
+// contact with an unfamiliar codebase; wall-clock estimates do not.
 //
 //  1  = trivial — one-line change, rename, copy tweak
 //  2  = simple — one file, well-understood, no design
@@ -112,7 +186,7 @@ const PLAN_SCHEMA = {
         properties: {
           step: { type: 'string' },
           rationale: { type: 'string' },
-          touches_files: { type: 'array', items: { type: 'string' } },
+          touches_files: { type: 'array', items: { type: 'string' }, description: 'repo-relative paths only' },
           complexity: { type: 'number', enum: [1, 2, 3, 5, 8, 13, 21] }
         }
       }
@@ -136,35 +210,31 @@ const PLAN_SCHEMA = {
 }
 ```
 
-**Sizing rules for sub-agents (include verbatim in BRIEF):**
+**Sizing rules for sub-agents (include verbatim in the brief):**
 - Use Fibonacci story points (1, 2, 3, 5, 8, 13, 21) — never days, hours, or weeks.
 - Estimate perceived complexity, not duration. If two steps both feel "medium" with comparable unknowns, both are 5. If one has more hidden coupling, bump it to 8.
 - Anything 21 must be split before reporting back.
 - Synthesis presents chunk totals as story-point sums, not time.
 
-4.5. **Write the handoff file (§0.6) the moment the Workflow returns its `runId`.** Before doing anything else — before answering Rich, before any AskUserQuestion — persist the ask, facts, runId, scriptPath, resume command, and a NEXT-STEP-ON-RESUME checklist to `docs/drafts/<date>_<TOPIC>-plan.md`. Append every clarification answer as it arrives. This is non-negotiable: it is the only durable record of the run before synthesis.
+4.5. **Persist the run state as soon as it starts (§0.3)** — the ask, the verified facts, any resume pointer, and a next-step-on-resume checklist. Append every clarification answer as it arrives. If the repo has no planning-doc convention, keep this in your notes rather than inventing a directory.
 
-5. **Write role-specific focus blocks** — each agent's `focus` is 6–10 bullet specific questions for that role. Don't let "architecture" plan everything; constrain to architecture's domain. Examples:
-   - architecture: pipeline shape, component boundaries, API contracts, mermaid, ADRs
-   - product: JTBD, user-visible failure modes today, priority ranking with defended order
-   - discovery: external option comparison matrices with recommendation
-   - ux-designer: how the feature surfaces to user in chat/voice, channel-specific format, correction UX
-   - security: threat model, ACL/isolation, PII, prompt injection, audit trail
-   - build: file-by-file change list, migration, rollout phasing, rollback
-   - test: failing test per move (red-green), recall/regression metrics, manual runbook
+5. **Write role-specific focus blocks** — each agent's `focus` is 6–10 specific bullet questions for that role. Don't let "architecture" plan everything; constrain each role to its domain, or you get N identical generic plans.
 
-6. **Synthesize in main thread** — when workflow returns the 7 (or N) plans, YOU (main agent) review them. Do NOT delegate synthesis to another agent — you carry the full conversation context, sub-agents do not. **Overwrite the handoff file (§0.6 step 5) with the final plan** so `/build` can read it. Produce:
+6. **Synthesize yourself** — when the role plans come back, YOU review them. Do NOT delegate synthesis to another agent: you carry the full conversation context, the sub-agents do not. Produce:
    - **Consensus** — what most roles agreed on
-   - **Conflicts** — where roles disagreed, and the resolution (with reasoning)
+   - **Conflicts** — where roles disagreed, and the resolution, with reasoning
    - **Gaps** — what no role covered that still matters
-   - **Final plan** — ordered, concrete, ready to execute. Include who owns each step, file paths, test names, per-chunk story-point complexity, and a per-task complexity total.
-   - **Open questions for Rich** — decisions only he can make
+   - **Final plan** — ordered, concrete, ready to execute. Include who owns each step, repo-relative file paths, test names, the detected test command, per-chunk story-point complexity, and a per-task total
+   - **Open questions for the user** — decisions only they can make
 
-   Present complexity in story points (1–21 Fibonacci). NEVER present "days", "hours", or "weeks" — those numbers are training-data hallucination, not actual signal.
+   Present complexity in story points (1–21 Fibonacci). Never present days, hours, or weeks.
 
-7. **Present the synthesis** — not the raw 7 plans. Rich asked for the final plan, not the deliberation transcript. If a specific plan had a brilliant detail, quote it; otherwise the synthesis is the deliverable.
+7. **Present the synthesis, not the raw role plans.** The user asked for the final plan, not the deliberation transcript. Quote a specific plan only when it had a detail worth surfacing verbatim.
 
-## Workflow tool boilerplate
+## Orchestration boilerplate (illustrative)
+
+Illustrative, not required — run the roles sequentially and independently if the
+harness has no parallel sub-agents (§0.3).
 
 ```js
 export const meta = {
@@ -194,23 +264,31 @@ const plans = await parallel(ROLES.map(({ name, focus }) => () =>
 return { plans: plans.filter(Boolean) }
 ```
 
-The Workflow tool returns a `runId` + `scriptPath` + transcript dir. **Capture them and write the handoff file (§0.6) immediately** — do not wait for `plans` to come back. The run is detached and resumable: `Workflow({scriptPath, resumeFromRunId})` replays cached agents on reconnect.
+If the harness returns a run handle, capture it and persist it with the run
+state (§0.3) before doing anything else — the run is detached and resumable.
 
 ## Rules
 
-- **Ultra caveman mode mandatory** for every sub-agent prompt (§0.5). Prepend `CAVEMAN_ULTRA`. Enums/file paths/schema names exact — caveman only on prose fields.
-- **Parallel, not sequential.** All role agents fire in one `parallel()`. They MUST not see each other's plans during stage 1 — independence is the point.
-- **Self-contained brief.** Sub-agents have no conversation history. Brief includes everything they need or they will hallucinate.
-- **Constrain each role.** Role focus = bullet questions, not "plan this". Otherwise every role writes the same generic plan.
-- **Main agent synthesizes.** Final plan is YOUR job, not a synthesis agent's. You have context they don't.
-- **Don't dump raw plans on user.** Synthesis is the deliverable. Mention specific dissents/gaps inline.
-- **Skip if task is trivial.** Single file read, factual question, status check — answer inline. Squad is for design-level decisions.
-- **Durable before synthesis (§0.6).** Write the handoff file at dispatch, persist every clarification answer, overwrite with the final plan. A dropped connection must never cost more than one resume step.
+- **Detect, don't assume** (§0.1). Read the repo's `CLAUDE.md` / `AGENTS.md` / `CONTRIBUTING.md` / `README.md` **if present**; their rules override this skill and belong in the brief. Their absence is normal.
+- **Repo-relative paths only.** No absolute paths, no OS assumptions — plans must be executable on Windows too.
+- **Never hardcode a test command** in a plan step (§0.2) — name the one this repo actually uses, or ask.
+- **Parallel, not sequential — and independent either way.** Role agents MUST not see each other's plans during the planning stage; independence is the entire value. In the sequential fallback, still withhold prior plans.
+- **Self-contained brief.** Sub-agents have no conversation history. The brief includes everything they need, or they will hallucinate it.
+- **Constrain each role.** Role focus = specific bullet questions, not "plan this."
+- **You synthesize.** The final plan is your job, not a synthesis agent's — you have the context they don't.
+- **Don't dump raw plans on the user.** The synthesis is the deliverable; mention specific dissents and gaps inline.
+- **Skip if the task is trivial.** A single file read, a factual question, a status check — answer inline. A squad is for design-level decisions.
+- **Include an eval gate when the plan touches an LLM call** (§0.6) — ground truth independent of the system under test, thresholds fixed before the run.
+- **Plans stop at planning.** A plan does not commit, push, deploy, or migrate. Execution is /build, and it commits locally and asks before pushing.
+- **Durable where possible (§0.3).** Persist the ask, the decisions, and the resume pointer; degrade to working notes when the repo has no planning-doc convention.
 
 ## Anti-patterns
 
-- 11 agents on a 2-file change. Pick 3–4.
-- Sequential agents. Squad's whole value is independence + parallelism.
-- Same focus block for every role (returns 7 identical generic plans).
-- Letting a synthesizer agent write the final plan — they don't have the conversation.
-- Showing user the raw JSON dump of all 7 plans.
+- Ten agents on a two-file change. Pick 3–4.
+- Sequential agents that can see each other's plans — the squad's whole value is independence.
+- The same focus block for every role (returns N identical generic plans).
+- Letting a synthesizer agent write the final plan — it doesn't have the conversation.
+- Showing the user a raw JSON dump of every role plan.
+- **Naming a test command the repo doesn't have**, so every downstream step is unrunnable.
+- **Writing the plan into a directory convention the repo doesn't use**, or refusing to plan because `CLAUDE.md` / `AGENTS.md` is missing.
+- Estimating in days/hours/weeks instead of complexity points.
