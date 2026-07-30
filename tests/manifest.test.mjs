@@ -286,6 +286,25 @@ test('no skill frontmatter contains XML-like tags (org Skills upload rejects the
   assert.deepEqual(offenders, [], `XML-like tags in frontmatter — use [brackets]:\n${offenders.join('\n')}`);
 });
 
+test('dev-setup covers Windows AND macOS, and establishes the OS before instructing', () => {
+  // Moth+Flame is a mixed Mac/Windows team. This skill shipped Mac-only (Homebrew,
+  // Command+Space, ~/.zprofile) while describing itself as generic setup, so a Windows
+  // teammate invoking it got a command that cannot work and no way to know why.
+  // Handing someone the wrong OS's steps is worse than handing them none.
+  const md = readFileSync(join(pluginRoot, 'skills', 'dev-setup', 'SKILL.md'), 'utf8');
+  assert.match(md, /winget install --id Git\.Git/, 'must give the Windows install command');
+  assert.match(md, /git-scm\.com\/download\/win/, 'must give a Windows fallback for machines without winget');
+  assert.match(md, /brew install git/, 'must still give the macOS install command');
+  // OS detection has to come BEFORE either track, or the branch is decorative.
+  const osStep = md.indexOf('Find out which computer they');
+  assert.ok(osStep > 0, 'must have an explicit OS-detection step');
+  assert.ok(osStep < md.indexOf('winget install'), 'OS detection must precede the Windows track');
+  assert.ok(osStep < md.indexOf('brew install git'), 'OS detection must precede the macOS track');
+  // The frontmatter must not advertise it as Mac-only, or Windows users never reach it.
+  const fm = md.slice(0, md.indexOf('---', 3));
+  assert.match(fm, /Windows/i, 'frontmatter must mention Windows so it triggers for PC users');
+});
+
 test('preflight demands a test runner only where the skill actually runs one', () => {
   // plan and audit change no code and run no tests — demanding a suite there would send
   // people away for a prerequisite the skill never uses.
