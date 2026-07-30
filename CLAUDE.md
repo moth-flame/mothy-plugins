@@ -71,7 +71,14 @@ Mothy is two cooperating surfaces — never confuse them
 - `plugins/mothy/skills/<name>/SKILL.md` — **canonical** skill orchestration
   (connect, customer-brief, deck, edit-in-place, video, article, video-setup,
   onboard, dev-setup, plus the engineering skills plan / build / test / fix).
-  The engineering skills are synced verbatim from the Mothy repo's
+  **NOT actually verbatim, and must not be** — `51a6f46` made these copies repo- and
+  OS-agnostic, and each of `plan`/`build`/`test`/`fix`/`audit` additionally carries a
+  `<!-- BEGIN desktop-preflight -->` block: they assume a checked-out repo with a
+  runnable test suite, which is true on Agent37 and false for a teammate invoking them
+  from the Claude desktop app. **Re-sync must PRESERVE that block** — it is pinned by
+  `PREFLIGHT_SKILLS` in `tests/manifest.test.mjs`, so a careless overwrite reddens CI
+  rather than silently shipping a skill that spawns agents and then fails confusingly.
+  Otherwise, the engineering skills track the Mothy repo's
   `.claude/skills/{plan,build,test,fix}/` (the source of truth for the team's
   Claude-Code standard) so Cowork/desktop users get the same multi-agent
   orchestration. Re-sync when the Mothy repo versions change.

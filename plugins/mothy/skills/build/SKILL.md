@@ -6,6 +6,42 @@ metadata: { "openclaw": { "emoji": "🔨" } }
 
 # build — Multi-role parallel build executor
 
+<!-- BEGIN desktop-preflight — plugin-distribution copy ONLY. PRESERVE when re-syncing
+     from the Mothy repo's .claude/skills/. The Mothy repo copies run on Agent37 and in
+     a checked-out repo, where these conditions are already true; this block exists for
+     teammates invoking the skill from the Claude desktop app. -->
+
+## §0.0 — Preflight: check the workspace, then explain (MANDATORY — runs before anything else)
+
+**Do this first — before reading files, before spawning any agent.** Many people reach
+this skill from the **Claude desktop app**, where a session may not be pointed at a code
+project at all. Do not start and then fail confusingly: check, and if something's missing,
+explain it plainly.
+
+1. **A real project folder is open** — source files you can read.
+2. **The project has a test runner you can actually execute.** Detect it, never assume a
+   command. This skill is red-green TDD: a failing test comes first, so with nothing
+   runnable there is no red and no proof the change works.
+3. **The folder is a git repository** — this skill commits its work locally. Without git
+   there is nowhere to land the change and no way to undo it.
+
+**If anything above is missing, STOP.** Do not spawn agents. Do not edit files. Do not
+guess. Say what's missing in plain, non-technical language and give the desktop-app fix:
+
+> I work on a real code project, and this chat isn't pointed at one yet. In the Claude
+> desktop app, open the folder for the project you want me to work on — approve access
+> when it asks — then send me your request again.
+
+If a **test suite** is the missing piece, say that specifically rather than lumping it in:
+the project opened fine, there's just nothing here I can run to prove a change is correct.
+Offer the alternative instead of stalling — I can still read the code and explain what I'd
+change; I just can't verify it.
+
+Assume the person may not be technical. Never answer with a raw error, a stack trace, or a
+terminal command they didn't ask for.
+
+<!-- END desktop-preflight -->
+
 > **What this skill is:** adversarial verification + classify-and-act + loop-until-done regression + brief sanitization + a verifier-line commit footer, on top of red-green TDD. Trivial units degrade gracefully — they skip the verifier.
 >
 > **Don't build without REAL tests.** A unit never ships behind a green-but-hollow suite: (a) tests assert the SPEC, never the impl's current (maybe-buggy) behavior; (b) every test must fail on a plausible mutation of the impl — a mutation no test catches is a coverage hole; (c) a separate **test-audit** critic (§4.7, distinct from the impl-verifier) hunts theater / assert-the-bug / mock-the-boundary tests with the T-rubric; (d) **local real-boundary testing** (§6.5) — exercise the actual boundary the mocks replaced, because `NOT NULL` / `CHECK` / `UNIQUE` / access-policy / trigger bugs pass every mocked test. /build stays **local**: deploying to a remote preview and smoke-testing it with real auth is /test's job, not this skill's.

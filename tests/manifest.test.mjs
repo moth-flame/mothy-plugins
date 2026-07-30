@@ -225,3 +225,60 @@ test('every command shim points at a skill directory that exists', () => {
     );
   }
 });
+
+// The engineering skills assume a checked-out repo with a runnable test suite — true on
+// Agent37 and in a dev's terminal, NOT true for a teammate invoking them from the Claude
+// desktop app, where a session may be pointed at no project at all. Without the preflight
+// they spawn agents and fail confusingly instead of explaining what to open.
+//
+// This is the exact content most at risk of being lost: CLAUDE.md calls these copies
+// "synced verbatim" from the Mothy repo's .claude/skills/, so a careless re-sync would
+// overwrite the block. (The copies already diverge on purpose — see 51a6f46, which made
+// them repo- and OS-agnostic — so the marker, not the word "verbatim", is the contract.)
+const PREFLIGHT_SKILLS = ['plan', 'build', 'test', 'fix', 'audit'];
+
+test('engineering skills carry the desktop preflight block (survives re-sync)', () => {
+  for (const s of PREFLIGHT_SKILLS) {
+    const md = readFileSync(join(pluginRoot, 'skills', s, 'SKILL.md'), 'utf8');
+    assert.ok(
+      md.includes('<!-- BEGIN desktop-preflight'),
+      `${s}/SKILL.md lost the desktop-preflight block — a re-sync from the Mothy repo probably overwrote it`,
+    );
+    assert.ok(
+      md.includes('<!-- END desktop-preflight -->'),
+      `${s}/SKILL.md: desktop-preflight block is unterminated`,
+    );
+    // Must actually name the surface and tell the user what to do, not just carry a marker.
+    assert.match(
+      md,
+      /Claude desktop app/,
+      `${s}/SKILL.md: preflight must name the Claude desktop app explicitly`,
+    );
+    // Must run before agents are spawned, or it cannot prevent the confusing failure.
+    assert.match(
+      md,
+      /before spawning any agent/i,
+      `${s}/SKILL.md: preflight must order itself before agent spawn`,
+    );
+  }
+});
+
+test('preflight demands a test runner only where the skill actually runs one', () => {
+  // plan and audit change no code and run no tests — demanding a suite there would send
+  // people away for a prerequisite the skill never uses.
+  for (const s of ['build', 'test', 'fix']) {
+    const md = readFileSync(join(pluginRoot, 'skills', s, 'SKILL.md'), 'utf8');
+    assert.match(md, /test runner you can actually execute/, `${s}: must require a runnable test suite`);
+  }
+  for (const s of ['plan', 'audit']) {
+    const md = readFileSync(join(pluginRoot, 'skills', s, 'SKILL.md'), 'utf8');
+    const pre = md.slice(
+      md.indexOf('<!-- BEGIN desktop-preflight'),
+      md.indexOf('<!-- END desktop-preflight -->'),
+    );
+    assert.ok(
+      !/test runner you can actually execute/.test(pre),
+      `${s}: must NOT require a test suite — it runs no tests`,
+    );
+  }
+});

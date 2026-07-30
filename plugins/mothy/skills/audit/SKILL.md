@@ -6,6 +6,39 @@ metadata: { "openclaw": { "emoji": "🔍" } }
 
 # audit — Repo Audit & Improvement Plan
 
+<!-- BEGIN desktop-preflight — plugin-distribution copy ONLY. PRESERVE when re-syncing
+     from the Mothy repo's .claude/skills/. The Mothy repo copies run on Agent37 and in
+     a checked-out repo, where these conditions are already true; this block exists for
+     teammates invoking the skill from the Claude desktop app. -->
+
+## §0.0 — Preflight: check the workspace, then explain (MANDATORY — runs before anything else)
+
+**Do this first — before reading files, before spawning any agent.** Many people reach
+this skill from the **Claude desktop app**, where a session may not be pointed at a code
+project at all. Do not start and then fail confusingly: check, and if something's missing,
+explain it plainly.
+
+1. **A real project folder is open** — source files you can read.
+2. That's all this skill needs. It is read-only by contract: it runs no tests and
+   modifies no code, config, or docs.
+
+**If anything above is missing, STOP.** Do not spawn agents. Do not edit files. Do not
+guess. Say what's missing in plain, non-technical language and give the desktop-app fix:
+
+> I work on a real code project, and this chat isn't pointed at one yet. In the Claude
+> desktop app, open the folder for the project you want me to work on — approve access
+> when it asks — then send me your request again.
+
+If a **test suite** is the missing piece, say that specifically rather than lumping it in:
+the project opened fine, there's just nothing here I can run to prove a change is correct.
+Offer the alternative instead of stalling — I can still read the code and explain what I'd
+change; I just can't verify it.
+
+Assume the person may not be technical. Never answer with a raw error, a stack trace, or a
+terminal command they didn't ask for.
+
+<!-- END desktop-preflight -->
+
 > World-class principal-engineer audit. Four phases, **in order, no skipping ahead**. Ground every claim in real files — cite `path:line`. Can't verify → say so, never guess.
 >
 > **HARD CONSTRAINT: analysis only. Do NOT modify any code, config, or docs during the audit.** No edits, no writes except the final report artifact. If user wants fixes, point them to `/plan` + `/build` after.

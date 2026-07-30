@@ -6,6 +6,44 @@ metadata: { "openclaw": { "emoji": "🐞" } }
 
 # fix — Multi-role bug-fixing executor
 
+<!-- BEGIN desktop-preflight — plugin-distribution copy ONLY. PRESERVE when re-syncing
+     from the Mothy repo's .claude/skills/. The Mothy repo copies run on Agent37 and in
+     a checked-out repo, where these conditions are already true; this block exists for
+     teammates invoking the skill from the Claude desktop app. -->
+
+## §0.0 — Preflight: check the workspace, then explain (MANDATORY — runs before anything else)
+
+**Do this first — before reading files, before spawning any agent.** Many people reach
+this skill from the **Claude desktop app**, where a session may not be pointed at a code
+project at all. Do not start and then fail confusingly: check, and if something's missing,
+explain it plainly.
+
+1. **A real project folder is open** — source files you can read.
+2. **The project has a test runner you can actually execute.** Detect it, never assume a
+   command. A fix here starts by reproducing the bug as a failing test, so with nothing
+   runnable the bug cannot be reproduced and any "fix" is a guess.
+3. **The folder is a git repository** — this skill commits its work locally.
+4. **You have something concrete to reproduce** — an error message, a wrong value, or
+   steps. If the report is only "it's broken", ask what they saw and what they expected
+   before starting.
+
+**If anything above is missing, STOP.** Do not spawn agents. Do not edit files. Do not
+guess. Say what's missing in plain, non-technical language and give the desktop-app fix:
+
+> I work on a real code project, and this chat isn't pointed at one yet. In the Claude
+> desktop app, open the folder for the project you want me to work on — approve access
+> when it asks — then send me your request again.
+
+If a **test suite** is the missing piece, say that specifically rather than lumping it in:
+the project opened fine, there's just nothing here I can run to prove a change is correct.
+Offer the alternative instead of stalling — I can still read the code and explain what I'd
+change; I just can't verify it.
+
+Assume the person may not be technical. Never answer with a raw error, a stack trace, or a
+terminal command they didn't ask for.
+
+<!-- END desktop-preflight -->
+
 > **What this skill is:** reproduce-first + root-cause diagnosis + minimal-blast-radius fix + adversarial verification (10 build classes R-01..R-10 PLUS 5 fix-specific classes F-01..F-05) + revert-check + full-regression-blocks-commit. Sibling to /build: same orchestration spine, inverted philosophy. /build executes a *decided new shape*; /fix surgically removes *wrong behavior* and resists expanding.
 >
 > **Repo-agnostic and OS-agnostic.** It detects the repo's test command, conventions, and role map rather than assuming them, and uses repo-relative paths only. It works on Windows, macOS, and Linux, in a repo with no `CLAUDE.md`, no `AGENTS.md`, no `docs/` directory, and no browser test setup.
