@@ -177,10 +177,13 @@ test('every command markdown file parses frontmatter with a description', () => 
 // the whole surface so the diff shows exactly which short names would die.
 const EXPECTED_COMMANDS = [
   'article',
+  'audit',
   'brief',
   'build',
   'connect',
   'deck',
+  'dev-setup',
+  'edit-in-place',
   'fix',
   'onboard',
   'plan',

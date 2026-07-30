@@ -45,8 +45,12 @@ Mothy is two cooperating surfaces — never confuse them
 - `plugins/mothy/.claude-plugin/plugin.json` — plugin manifest (name, version,
   metadata). Bump `version` when shipping plugin changes.
 - `plugins/mothy/commands/*.md` — **thin** slash-command entrypoints (`/connect`,
-  `/brief`, `/deck`, `/video`, `/article`, `/video-setup`, `/onboard`, plus the
-  engineering set `/plan`, `/build`, `/test`, `/fix`).
+  `/brief`, `/deck`, `/video`, `/article`, `/video-setup`, `/onboard`,
+  `/edit-in-place`, `/dev-setup`, plus the engineering set `/plan`, `/build`,
+  `/test`, `/fix`, `/audit`). **Every skill that users are told to invoke by
+  name needs one** — `audit` and `dev-setup` shipped for weeks advertising
+  `/audit` and `/dev-setup` in their own `description:` while no such command
+  existed (added 0.4.3).
   Frontmatter + a one-line invoke of the matching skill. **No logic here.**
 
   > **These shims are NOT duplicates of the same-named skills — do not "de-dupe"
