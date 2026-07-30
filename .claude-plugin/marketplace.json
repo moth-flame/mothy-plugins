@@ -4,12 +4,13 @@
     "name": "Moth+Flame",
     "email": "rich@mothandflamevr.com"
   },
+  "description": "Moth+Flame team plugins: customer briefs, capability decks, intel search, Google Workspace in-place edits, onboarding, and the plan/build/test/fix engineering workflow.",
   "plugins": [
     {
       "name": "mothy",
       "source": "./plugins/mothy",
       "description": "Moth+Flame team agent: customer briefs, capability decks, intel, Google Workspace edits, onboarding.",
-      "version": "0.4.0"
+      "version": "0.4.1"
     }
   ]
 }
