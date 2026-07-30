@@ -286,6 +286,50 @@ test('no skill frontmatter contains XML-like tags (org Skills upload rejects the
   assert.deepEqual(offenders, [], `XML-like tags in frontmatter — use [brackets]:\n${offenders.join('\n')}`);
 });
 
+test('no skill file carries a literal secret', () => {
+  // These skills are distributed org-wide (plugin "Installed by default") and now also as
+  // standalone organization skills, so a committed credential would reach everyone. The
+  // discipline the skills already state — "read from the env var at runtime, NEVER write
+  // the literal into any file" — is asserted here rather than trusted.
+  const skillsDir = join(pluginRoot, 'skills');
+  const bad = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir)) {
+      const full = join(dir, e);
+      if (statSync(full).isDirectory()) { walk(full); continue; }
+      if (!/\.(md|mjs|js|json|sh)$/.test(e)) continue;
+      const txt = readFileSync(full, 'utf8');
+      // Bearer/JWT/provider-prefixed tokens are unambiguous — no literal form is legitimate.
+      for (const re of [/eyJ[A-Za-z0-9_-]{20,}\./g, /\bsk-[A-Za-z0-9]{20,}/g, /\bxox[bpas]-[A-Za-z0-9-]{20,}/g]) {
+        const m = txt.match(re);
+        if (m) bad.push(`${full}: ${m[0].slice(0, 12)}…`);
+      }
+      // An assignment of a password/secret/key to a quoted literal.
+      const assign = txt.match(/\b(PASSWORD|PASSWD|SECRET|API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|SERVICE_ROLE_KEY)\s*[:=]\s*["'][^"'\s${}]{8,}["']/g);
+      if (assign) bad.push(`${full}: ${assign[0].slice(0, 40)}…`);
+    }
+  };
+  walk(skillsDir);
+  assert.deepEqual(bad, [], `literal secrets found in distributed skills:\n${bad.join('\n')}`);
+});
+
+test('video tooling paths are channel-agnostic (CLAUDE_PLUGIN_ROOT is plugin-only)', () => {
+  // ${CLAUDE_PLUGIN_ROOT} is defined ONLY in the plugin channel. Uploaded as a standalone
+  // organization skill it expands to nothing, silently turning all 8 tooling paths into
+  // absolute paths that don't exist. Paths are skill-relative; the variable may appear
+  // only inside the §0.1 explainer that tells you how to resolve it per channel.
+  const md = readFileSync(join(pluginRoot, 'skills', 'video', 'SKILL.md'), 'utf8');
+  assert.match(md, /Resolving `<skill>\/`/, 'video must explain how to resolve <skill>/');
+  assert.ok(md.includes('<skill>/tooling/'), 'tooling paths must be skill-relative');
+  const explainer = md.slice(md.indexOf('### §0.1'), md.indexOf('### §0.1') + 1200);
+  const total = (md.match(/\$\{CLAUDE_PLUGIN_ROOT\}/g) || []).length;
+  const inExplainer = (explainer.match(/\$\{CLAUDE_PLUGIN_ROOT\}/g) || []).length;
+  assert.equal(
+    total, inExplainer,
+    `${total - inExplainer} \${CLAUDE_PLUGIN_ROOT} reference(s) outside the §0.1 explainer — those break as an org skill`,
+  );
+});
+
 test('video gates on prerequisites before spending its ~20.7k on-invoke budget', () => {
   // video ships in the plugin, which is "Installed by default" org-wide — so every
   // teammate has it, while it actually needs the app repo checked out and runnable,

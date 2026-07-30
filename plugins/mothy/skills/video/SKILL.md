@@ -19,10 +19,14 @@ produces no video.
 
 You need **all** of the following:
 
-1. **The target app's repo checked out and runnable locally** — for the reference flow
-   that is CommandIQ, with a working `.env.local` and a reachable Supabase.
-2. **Demo seed data + capture credentials** for the org you're filming (see the reference
-   appendix). Filming an empty app produces an empty video.
+1. **A capturable target.** Most flows need NO repo checkout — they drive the **live dev
+   app** as the demo-capture user against allowlisted, anonymized demo orgs (see the
+   reference appendix). Only flows explicitly marked local-dev need the app's repo,
+   `.env.local` and a reachable Supabase. Check which kind the requested flow is before
+   telling anyone they need a developer setup.
+2. **Capture credentials for that target**, resolved from env at runtime — never a literal
+   in any file, brief, log or artifact. Filming an app you can't log into, or an org with
+   no demo data, produces an empty video.
 3. **`ffmpeg` and Playwright available.** Check `ffmpeg -version` and whether Playwright's
    browsers are installed. If either is missing and everything else above is satisfied,
    install them — `winget install Gyan.FFmpeg` on Windows, `brew install ffmpeg` on macOS,
@@ -30,22 +34,39 @@ You need **all** of the following:
 4. **ElevenLabs (voiceover) and, for delivery, Vimeo credentials.** `/video-setup` reports
    exactly which are missing without ever printing a value — point there, don't guess.
 
-**If the app repo or its seed data is missing, STOP and say so plainly:**
+**If you cannot reach a capturable target, STOP and say so plainly:**
 
 > Producing a demo video means driving the real app with a browser and filming it, so I
-> need the app running locally with demo data — plus ffmpeg and an ElevenLabs key for the
-> voiceover. That's a developer-machine setup, so this one probably isn't for you. If you
-> want a demo video made, ask Rich. If you were after something else, `/deck` builds a
-> customer capability deck and `/customer-brief` builds an account one-pager — neither
-> needs any of this.
+> need to be able to log into it plus ffmpeg and an ElevenLabs key for the voiceover. I
+> can't get in from here. If you want a demo video made, ask Rich. If you were after
+> something else, `/deck` builds a customer capability deck and `/customer-brief` builds
+> an account one-pager — neither needs any of this.
 
-Missing **tooling or credentials** is a different case from missing **repo/seed data**:
-tooling you can install and creds can be added, so offer that. A missing app checkout is
-where you stop.
+Grade the failure — do not collapse these into one refusal:
+- **Missing tooling** (ffmpeg, Playwright browsers) → install it, don't send them away.
+- **Missing credentials** → point at `/video-setup`, which reports exactly which keys are
+  absent without ever printing a value. Each person sets their OWN keys locally; nothing
+  is committed and no secret travels with this skill.
+- **No reachable target app** → that is the genuine stop.
 
 <!-- END prereq-gate -->
+### §0.1 — Resolving `<skill>/` (read this before using any tooling path)
 
-> Born from the 2026-06 CommandMRO demo build. The *engine* (capture → VO → assemble → review → deliver) is flow-agnostic; only the beat list + seed data + delivery destinations are flow-specific, and those live in a **flow config** (see CONFIG below), never hardcoded in this prose. Reusable tooling lives in `${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/` (overlay lib, ffmpeg helpers, tts, assemble) — reuse it, don't rebuild it.
+Paths below are written `<skill>/tooling/...`, meaning **relative to this skill's own
+directory** — the folder containing this `SKILL.md`. The vendored tooling ships inside the
+skill, so it is always right there next to this file.
+
+Resolve it from where the skill actually lives:
+- **Installed as part of the mothy plugin:** `${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/…`
+- **Installed as a standalone organization skill, or from `~/.claude/skills/`:** the
+  `tooling/` directory sits beside this file — resolve relative to it.
+
+Do **not** hardcode `${CLAUDE_PLUGIN_ROOT}`: it is defined only in the plugin channel and
+expands to nothing elsewhere, which silently turns every tooling path into an absolute
+path that does not exist.
+
+
+> Born from the 2026-06 CommandMRO demo build. The *engine* (capture → VO → assemble → review → deliver) is flow-agnostic; only the beat list + seed data + delivery destinations are flow-specific, and those live in a **flow config** (see CONFIG below), never hardcoded in this prose. Reusable tooling lives in `<skill>/tooling/` (overlay lib, ffmpeg helpers, tts, assemble) — reuse it, don't rebuild it.
 
 ## When to use / not use
 
@@ -56,7 +77,7 @@ If the user asks for the **CommandMRO technical demo flow** specifically → use
 
 ## CONFIG (per-flow)
 
-The engine is driven by a **flow config**: a JSON file that carries everything flow-specific so a new demo can be produced **without editing this SKILL or the tooling**. The skill reads `skills/video/tooling/flows/<flowId>.config.json` (resolved under `${CLAUDE_PLUGIN_ROOT}`), validated against `skills/video/tooling/flows/flow.config.schema.json` (`schemaVersion: 1`).
+The engine is driven by a **flow config**: a JSON file that carries everything flow-specific so a new demo can be produced **without editing this SKILL or the tooling**. The skill reads `skills/video/tooling/flows/<flowId>.config.json` (resolved under `<skill>/` — see §0.1), validated against `skills/video/tooling/flows/flow.config.schema.json` (`schemaVersion: 1`).
 
 **Default flow:** when the user names no flow, default to `commandmro.config.json` — the bundled CommandIQ reference flow (the 9-beat CommandMRO capability reel documented in the reference appendix). When the user names a flow (`/video <flowId>`), load `<flowId>.config.json`.
 
@@ -160,7 +181,7 @@ plan/confirm-scope → SPIKE (go/no-go) → tooling → seed → capture per-bea
 
 ## 4. The cursor / finger-dot overlay (the keystone)
 
-Use `${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/lib/overlay.js`:
+Use `<skill>/tooling/lib/overlay.js`:
 - **DOM-injected** via `page.addInitScript` onto `document.documentElement` (NOT the React root) with `position:fixed; pointer-events:none; z-index:2147483647` so SPA/Expo re-renders never wipe it, and it's captured natively (no post-compositing).
 - **Two visually distinct skins** — portal = sharp CYAN arrow + click ring; tablet = translucent AMBER finger-dot + tap ripple. Distinct shape AND color so a viewer can tell device-from-pointer alone (both surfaces are dark).
 - **Motion contract:** never teleport; ease; dwell ≥250–280ms BEFORE the click (viewer's eye arrives first); ~400ms hold after; finger ~15% slower than cursor.
@@ -172,14 +193,14 @@ Use `${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/lib/overlay.js`:
 
 **Narration principle — value-first, the hard rule.** VO emphasizes ONLY three things, and every line must answer the customer's *"what does this do for me?"*: **(a) how the feature works**, **(b) the value it delivers**, **(c) the customer's job-to-be-done** (this is what `config.narration.style` defaults to). **NEVER narrate internal UI / design-implementation details** — line routing, why an element sits where it does, color/spacing/positioning choices, "the lines never intersect", visual-polish rationale, framework internals, or how it was built. That is *builder guidance*, not customer value. **Litmus test: if a visual detail doesn't change what the user can DO or decide, it does not belong in the VO.** (Origin: a Career Map reel narrated that the subway lines "never intersect" — pure styling guidance the customer does not care about.) Keep this consistent with the pacing rules below: one voice, pacing matched to the beats, no dead air, spoken full names not acronyms.
 
-- **Raw REST** `api.elevenlabs.io/v1/text-to-speech/{voice_id}` with the `xi-api-key` header (key from the `ELEVENLABS_API_KEY` env var — strip surrounding quotes; see Credentials). There is NO Node TTS SDK; `@elevenlabs/react` is browser-only. Use `${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/tts.mjs`.
+- **Raw REST** `api.elevenlabs.io/v1/text-to-speech/{voice_id}` with the `xi-api-key` header (key from the `ELEVENLABS_API_KEY` env var — strip surrounding quotes; see Credentials). There is NO Node TTS SDK; `@elevenlabs/react` is browser-only. Use `<skill>/tooling/tts.mjs`.
 - Model `config.narration.model` (`eleven_multilingual_v2`). **C4 — HOUSE VOICE for CommandIQ assets: ElevenLabs 'Eric', voice id `cjVigY5qzO86Huf0OWal`** (the CommandIQ overview + career videos voice) — set `narration.voiceName: "Eric"` + `narration.voiceId: "cjVigY5qzO86Huf0OWal"` in the flow config. An explicit `voiceId` always wins over name lookup (tts.mjs passes an id through untouched); resolve by `voiceName` (`GET /v1/voices`) only when the id is null. Never ship the generic default narrator on a CommandIQ asset.
 - **C4b — QA the generated VO BEFORE assembly.** STT-transcribe each rendered `vo-<id>.mp3` (ElevenLabs scribe_v1 / whisper) and compare it to the script line: duplicated/stuttered words, garbles, and any WER-visible deviation (the "before survey at enrollment" → "add enrollment" class) FAIL the line → re-render ONLY that line (credit discipline), bounded; a line that stays bad hard-fails the VO stage.
 - **C5 — GENERIC-IZE identifiers in the VO.** Never voice an org name, slug, username, or person name — say "the organization", "an org admin", "a team". Full sentences only (dangling fragments like "Learning gain, measured." TTS-garble into duplicated tails). On-screen org/user chrome that can't be framed out is tolerated FOR NOW — but it must never be SPOKEN. Keep a `config.qa.piiTerms` list; the transcript gate (§7c) hard-fails if any term is voiced, and the OCR sweep (§7a) warns when one is visible on screen.
 - One mp3 per beat + a durations manifest (ffprobe).
 - **VO copy must match what's actually on screen.** Capture or screenshot the beats first, THEN finalize VO — live data often differs from `config.beats[].voGist` (e.g. "unclassified" docs were all CUI; "custom framework button" was inline sliders; an IMI was gauge-reading not hazard-spotting). Reconcile copy before rendering. Spoken full dimension/feature names per `config.narration.style`, never acronyms.
 
-## 6. Assembly (ffmpeg) — `${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/assemble.mjs` + `lib/ffmpeg.mjs`
+## 6. Assembly (ffmpeg) — `<skill>/tooling/assemble.mjs` + `lib/ffmpeg.mjs`
 
 - **Normalize EVERY segment** to identical params (1920×1080 / 30fps / yuv420p / h264 / aac-48k / setsar=1) — required for clean concat.
 - **Pillarbox** portrait/tablet beats onto a dark canvas (`#07111f`), centered.
@@ -250,7 +271,7 @@ Resolution order for every secret: **env var → `$MOTHY_STATE_DIR` → `~/.moth
 DO:
 - Run the CONFIRM-SCOPE card before building all beats. Confirm course/module before capturing.
 - One agent per beat, explicit file ownership, background, GATE-B per beat (`config.beats[].waitFor`).
-- Reuse `${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/`. Deterministic seed identity (`config.seed.fixedEnrollmentCode`). Additive + scoped teardown (`config.seed.scopeTag`).
+- Reuse `<skill>/tooling/`. Deterministic seed identity (`config.seed.fixedEnrollmentCode`). Additive + scoped teardown (`config.seed.scopeTag`).
 - Match VO to the actual rendered screen (review captures first).
 - Wait out the loading splash on every boot/navigation (poll `config.splash.anchorSelector`) and auto-trim any that slip in (§6).
 - Live-render review the thumbnails before delivering: scan for Playwright glitches (stray focus rings, half-loaded states, scrollbar jumps, stuck hover) AND splash frames — re-capture anything that shows them. Speed-match over-long beats.
@@ -274,7 +295,7 @@ DON'T:
 - Don't write to prod without explicit per-write authorization; do read-only discovery first, then one scoped write.
 
 ## Reusable assets (vendored tooling)
-`${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/`: `lib/overlay.js` (synthetic cursor — click ring fires only on real clicks), `lib/ffmpeg.mjs` (normalize/mux/concat + `detectSplashHead`/`trimHead`/`trimSplashHead` splash guard), `lib/urlbar.js` (synthetic browser address bar), `tts.mjs`, `assemble.mjs`. The flow configs + schema live at `tooling/flows/<flowId>.config.json` + `tooling/flows/flow.config.schema.json`. Per-beat capture scripts (`beats/NN-<beat.id>.mjs`), the `vo-script.json`, the seed script, and any local api-server shim are **flow assets**, NOT vendored shared tooling — generate them per run into the session workspace (the seed script is `config.seed.strategy`). Start from the vendored libs; never rebuild them.
+`<skill>/tooling/`: `lib/overlay.js` (synthetic cursor — click ring fires only on real clicks), `lib/ffmpeg.mjs` (normalize/mux/concat + `detectSplashHead`/`trimHead`/`trimSplashHead` splash guard), `lib/urlbar.js` (synthetic browser address bar), `tts.mjs`, `assemble.mjs`. The flow configs + schema live at `tooling/flows/<flowId>.config.json` + `tooling/flows/flow.config.schema.json`. Per-beat capture scripts (`beats/NN-<beat.id>.mjs`), the `vo-script.json`, the seed script, and any local api-server shim are **flow assets**, NOT vendored shared tooling — generate them per run into the session workspace (the seed script is `config.seed.strategy`). Start from the vendored libs; never rebuild them.
 
 ---
 
@@ -351,5 +372,5 @@ Sometimes the real orgs/courses live on **prod**, not local dev (e.g. "Leadershi
   - **Landing dashboards leak names** — strategic "Commander's Readiness Overview" + "At-Risk Learners" lists a real name; **head-trim the beat to start at the Settings screen**, past the dashboard. Scan every frame for non-demo names before shipping.
 - **Mark every learner you create `is_testing=true` AFTER capture** (authorized hygiene; Rule 56 hides them from analytics, Rule 23 forbids deleting them). Don't mark before the reveal shot — a testing learner you're filming must stay visible during the shot.
 - **Reveal beats: the deliverable (a code/value) is at the END of a long navigation beat.** The 1.7× speed cap will TRIM THE TAIL and silently drop the reveal. Fix: lengthen that beat's VO so the footage plays in full, then **protect-hold** the reveal frame (footage at 1.0×, hold last frame for the VO remainder — never tail-trim a reveal). And **don't let the synthetic cursor rest ON the value** — it obscures a glyph (a held "BLACK-WOLF-7" read as "...1"); hold a frame where the cursor is adjacent and the full string is legible.
-- **Synthetic browser address bar** (`${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/lib/urlbar.js`) for any "edit/strip the URL" beat — `recordVideo` captures the page viewport, NOT real browser chrome. Fixed-position, injected via `addInitScript` on `documentElement`, per-character spans so a segment can be selected + animate-deleted; navigate the real page in sync. Run it in the authed context so `/` lands on the portal, not a login page.
+- **Synthetic browser address bar** (`<skill>/tooling/lib/urlbar.js`) for any "edit/strip the URL" beat — `recordVideo` captures the page viewport, NOT real browser chrome. Fixed-position, injected via `addInitScript` on `documentElement`, per-character spans so a segment can be selected + animate-deleted; navigate the real page in sync. Run it in the authed context so `/` lands on the portal, not a login page.
 - **Verify shared cross-beat values from PIXELS/DB, never an agent's self-report.** Capture agents misread their own captures (a minted code reported as `BLACK-WOLF-7` was misread `-1` by two readers; a stale B2 take typed `BLUE-FALCON-5`). For a code minted in beat N and entered in beat N+1, read it off the reveal frame AND confirm via service-role REST, then thread the confirmed string forward.
