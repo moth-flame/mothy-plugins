@@ -1,6 +1,6 @@
 ---
 name: build
-description: Multi-role parallel build + test executor. Decompose a planned change into work units, spawn build + test + security + architecture sub-agents in parallel to implement them, manage red-green TDD verification, run the repo's regression suite, fix issues, commit locally (ask before pushing). Use when user invokes /build <topic>, says "build it", "implement the plan", "ship it", "execute the plan", or asks to execute work that already has a plan. Reads the planning artifact (a recent plan file or a /plan synthesis in the conversation). Pair with /plan to design first.
+description: Multi-role parallel build + test executor. Decompose a planned change into work units, spawn build + test + security + architecture sub-agents in parallel to implement them, manage red-green TDD verification, run the repo's regression suite, fix issues, commit locally (ask before pushing). Use when user invokes /build [topic], says "build it", "implement the plan", "ship it", "execute the plan", or asks to execute work that already has a plan. Reads the planning artifact (a recent plan file or a /plan synthesis in the conversation). Pair with /plan to design first.
 metadata: { "openclaw": { "emoji": "🔨" } }
 ---
 

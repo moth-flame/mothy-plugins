@@ -1,6 +1,6 @@
 ---
 name: fix
-description: Multi-role bug-fixing executor. Reproduce a reported bug as a failing test, diagnose root cause with parallel read-only scout agents, apply the smallest fix that addresses the root cause, adversarially verify it didn't mask a symptom or regress siblings, run the repo's full regression suite, commit locally (ask before pushing). Use when user invokes /fix <bug>, says "fix this bug", "this is broken", "debug and fix", "track down and fix", or invokes bare /fix (uses the most recent reported bug in the conversation). NOT for building new features — that's /build.
+description: Multi-role bug-fixing executor. Reproduce a reported bug as a failing test, diagnose root cause with parallel read-only scout agents, apply the smallest fix that addresses the root cause, adversarially verify it didn't mask a symptom or regress siblings, run the repo's full regression suite, commit locally (ask before pushing). Use when user invokes /fix [bug], says "fix this bug", "this is broken", "debug and fix", "track down and fix", or invokes bare /fix (uses the most recent reported bug in the conversation). NOT for building new features — that's /build.
 metadata: { "openclaw": { "emoji": "🐞" } }
 ---
 

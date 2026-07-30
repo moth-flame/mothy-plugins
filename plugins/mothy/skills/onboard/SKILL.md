@@ -3,7 +3,7 @@ name: onboard
 description: >-
   Two related onboarding flows for Moth+Flame vibe-coding (AI-assisted work).
   ADMIN: start onboarding a teammate. Triggered by an admin saying "onboard
-  <person>", "onboard @user", "set up X with vibe coding", "kick off X's
+  [person]", "onboard @user", "set up X with vibe coding", "kick off X's
   onboarding", "/vibe-onboard X", or bare "onboard" (then ask who). SELF: a
   team member resuming their own walkthrough — "start the walkthrough",
   "continue my onboarding", "what's next in my onboarding". Admin flow runs

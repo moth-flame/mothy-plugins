@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Multi-role independent planning then synthesis. Spawn parallel sub-agents one per relevant role (architecture, product, discovery, design/UX, security, build, test, etc.), each plans the task independently with a shared brief, then synthesize their plans into a final unified plan. Use when the user invokes /plan <topic>, or says "plan this", "have a team plan this", "get a panel to think about this", "spawn a roundtable". For comprehensive design decisions where multiple lenses add signal. Pair with /build to execute the plan.
+description: Multi-role independent planning then synthesis. Spawn parallel sub-agents one per relevant role (architecture, product, discovery, design/UX, security, build, test, etc.), each plans the task independently with a shared brief, then synthesize their plans into a final unified plan. Use when the user invokes /plan [topic], or says "plan this", "have a team plan this", "get a panel to think about this", "spawn a roundtable". For comprehensive design decisions where multiple lenses add signal. Pair with /build to execute the plan.
 metadata: { "openclaw": { "emoji": "🧠" } }
 ---
 

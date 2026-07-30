@@ -263,6 +263,29 @@ test('engineering skills carry the desktop preflight block (survives re-sync)', 
   }
 });
 
+test('no skill frontmatter contains XML-like tags (org Skills upload rejects them)', () => {
+  // The claude.ai org-Skills uploader hard-rejects with
+  //   "SKILL.md description cannot contain XML tags"
+  // and an argument placeholder written as /plan <topic> trips it — 8 of our skills did.
+  // The CLI accepts them, so the plugin channel never surfaced this; it only appears when
+  // the same SKILL.md is uploaded as an organization skill. House style is [topic].
+  // Body text is NOT checked: code blocks legitimately contain XML/HTML.
+  const skillsDir = join(pluginRoot, 'skills');
+  const offenders = [];
+  for (const dir of readdirSync(skillsDir).filter((d) => statSync(join(skillsDir, d)).isDirectory())) {
+    const md = readFileSync(join(skillsDir, dir, 'SKILL.md'), 'utf8');
+    const lines = md.split(/\r?\n/);
+    let fence = 0;
+    for (const line of lines) {
+      if (line.trim() === '---') { fence++; if (fence >= 2) break; continue; }
+      if (fence !== 1) continue;
+      const tags = line.match(/<[A-Za-z/][^>]*>/g);
+      if (tags) offenders.push(`${dir}: ${tags.join(' ')}`);
+    }
+  }
+  assert.deepEqual(offenders, [], `XML-like tags in frontmatter — use [brackets]:\n${offenders.join('\n')}`);
+});
+
 test('preflight demands a test runner only where the skill actually runs one', () => {
   // plan and audit change no code and run no tests — demanding a suite there would send
   // people away for a prerequisite the skill never uses.

@@ -1,6 +1,6 @@
 ---
 name: video
-description: Produce a narrated product-demo VIDEO by driving the real running app with Playwright, generating voiceover with ElevenLabs, and assembling with ffmpeg. Use when the user says "/video", "make a demo video", "record a product demo", "capture a walkthrough video", "make a sales/capability video of <flow>", or asks to reproduce a live demo as a recorded asset. Orchestrates parallel capture agents per beat, a synthetic cursor/finger-dot overlay, value-first VO, and a final live-render review. NOT for screenshots-only, GIFs, or editing an existing video file.
+description: Produce a narrated product-demo VIDEO by driving the real running app with Playwright, generating voiceover with ElevenLabs, and assembling with ffmpeg. Use when the user says "/video", "make a demo video", "record a product demo", "capture a walkthrough video", "make a sales/capability video of [flow]", or asks to reproduce a live demo as a recorded asset. Orchestrates parallel capture agents per beat, a synthetic cursor/finger-dot overlay, value-first VO, and a final live-render review. NOT for screenshots-only, GIFs, or editing an existing video file.
 ---
 
 # video — narrated product-demo video producer

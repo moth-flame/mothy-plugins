@@ -3,9 +3,9 @@ name: customer-brief
 description: >-
   Build a one-pager / context-load on a Moth+Flame customer account before a
   call. Triggered by:
-    - "brief me on <customer>", "give me a customer brief", "I have a call with
-      <X>", "what do we know about <customer>", "context on <account>",
-      "<customer> overview", "status on <account>"
+    - "brief me on [customer]", "give me a customer brief", "I have a call with
+      [X]", "what do we know about [customer]", "context on [account]",
+      "[customer] overview", "status on [account]"
   Pulls from Moth+Flame's own account data — Ops Hub account plans plus
   cross-source intel — not the public web. Runs through the `brief_start`
   action via `mcp__mothy__mothy`.

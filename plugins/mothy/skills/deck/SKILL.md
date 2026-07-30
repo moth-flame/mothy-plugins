@@ -4,7 +4,7 @@ description: >-
   Walk a Moth+Flame team member through building a customer capabilities deck.
   Triggered by:
     - User says "make a deck", "draft a pitch deck", "draft a pitch", "prep for
-      a customer meeting", "deck for <prospect>", "/deck", or similar
+      a customer meeting", "deck for [prospect]", "/deck", or similar
     - Or programmatically via the `deck_playbook_get` action through
       `mcp__mothy__mothy`
   Source: Jason's capability deck playbook, ratified by Rich 2026-06-01.
