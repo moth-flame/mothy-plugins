@@ -286,6 +286,28 @@ test('no skill frontmatter contains XML-like tags (org Skills upload rejects the
   assert.deepEqual(offenders, [], `XML-like tags in frontmatter — use [brackets]:\n${offenders.join('\n')}`);
 });
 
+test('video gates on prerequisites before spending its ~20.7k on-invoke budget', () => {
+  // video ships in the plugin, which is "Installed by default" org-wide — so every
+  // teammate has it, while it actually needs the app repo checked out and runnable,
+  // demo seed data, ffmpeg + Playwright, and ElevenLabs/Vimeo creds. It is the single
+  // most expensive skill here to invoke (~20.7k tokens), so an unrunnable invoke must
+  // bail in the first exchange, not 20k deep. It stays in the plugin deliberately:
+  // ${CLAUDE_PLUGIN_ROOT} resolves there, so it genuinely works for whoever does capture.
+  const md = readFileSync(join(pluginRoot, 'skills', 'video', 'SKILL.md'), 'utf8');
+  assert.ok(md.includes('<!-- BEGIN prereq-gate'), 'video/SKILL.md lost its prerequisites gate');
+  assert.ok(md.includes('<!-- END prereq-gate -->'), 'video prereq-gate is unterminated');
+  const gateAt = md.indexOf('BEGIN prereq-gate');
+  // Must precede the flow-config machinery, or the skill has already started working.
+  const configAt = md.indexOf('flow config');
+  assert.ok(gateAt > 0 && configAt > 0 && gateAt < configAt, 'gate must precede the flow-config section');
+  // Must offer a real alternative rather than dead-ending a teammate who cannot run it.
+  assert.match(md, /\/deck/, 'gate should redirect to /deck');
+  assert.match(md, /\/customer-brief/, 'gate should redirect to /customer-brief');
+  // Installing tooling is fine; a missing app checkout is the hard stop. Both must appear.
+  assert.match(md, /winget install Gyan\.FFmpeg/, 'must give a Windows ffmpeg install');
+  assert.match(md, /brew install ffmpeg/, 'must give a macOS ffmpeg install');
+});
+
 test('dev-setup covers Windows AND macOS, and establishes the OS before instructing', () => {
   // Moth+Flame is a mixed Mac/Windows team. This skill shipped Mac-only (Homebrew,
   // Command+Space, ~/.zprofile) while describing itself as generic setup, so a Windows

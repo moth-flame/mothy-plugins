@@ -5,6 +5,46 @@ description: Produce a narrated product-demo VIDEO by driving the real running a
 
 # video — narrated product-demo video producer
 
+<!-- BEGIN prereq-gate — this skill is org-distributed ("Installed by default") but is a
+     SPECIALIST capture rig, not a general team capability. Costs ~20.7k tokens on invoke.
+     Bail in the first exchange rather than 20k deep. PRESERVE this block. -->
+
+## §0 — Prerequisites gate (MANDATORY — before anything else)
+
+**This skill is far more demanding than the rest of the Mothy set, and it is installed
+for everyone in the org.** Most people who reach it cannot run it. Check first, and if
+the prerequisites aren't there, say so immediately — do not start planning beats, do not
+spawn capture agents, do not read the flow config. A wasted invoke costs ~20k tokens and
+produces no video.
+
+You need **all** of the following:
+
+1. **The target app's repo checked out and runnable locally** — for the reference flow
+   that is CommandIQ, with a working `.env.local` and a reachable Supabase.
+2. **Demo seed data + capture credentials** for the org you're filming (see the reference
+   appendix). Filming an empty app produces an empty video.
+3. **`ffmpeg` and Playwright available.** Check `ffmpeg -version` and whether Playwright's
+   browsers are installed. If either is missing and everything else above is satisfied,
+   install them — `winget install Gyan.FFmpeg` on Windows, `brew install ffmpeg` on macOS,
+   plus `npx playwright install chromium` — rather than sending the user away.
+4. **ElevenLabs (voiceover) and, for delivery, Vimeo credentials.** `/video-setup` reports
+   exactly which are missing without ever printing a value — point there, don't guess.
+
+**If the app repo or its seed data is missing, STOP and say so plainly:**
+
+> Producing a demo video means driving the real app with a browser and filming it, so I
+> need the app running locally with demo data — plus ffmpeg and an ElevenLabs key for the
+> voiceover. That's a developer-machine setup, so this one probably isn't for you. If you
+> want a demo video made, ask Rich. If you were after something else, `/deck` builds a
+> customer capability deck and `/customer-brief` builds an account one-pager — neither
+> needs any of this.
+
+Missing **tooling or credentials** is a different case from missing **repo/seed data**:
+tooling you can install and creds can be added, so offer that. A missing app checkout is
+where you stop.
+
+<!-- END prereq-gate -->
+
 > Born from the 2026-06 CommandMRO demo build. The *engine* (capture → VO → assemble → review → deliver) is flow-agnostic; only the beat list + seed data + delivery destinations are flow-specific, and those live in a **flow config** (see CONFIG below), never hardcoded in this prose. Reusable tooling lives in `${CLAUDE_PLUGIN_ROOT}/skills/video/tooling/` (overlay lib, ffmpeg helpers, tts, assemble) — reuse it, don't rebuild it.
 
 ## When to use / not use
