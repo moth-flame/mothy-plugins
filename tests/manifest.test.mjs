@@ -164,16 +164,61 @@ test('every command markdown file parses frontmatter with a description', () => 
   }
 });
 
-test('each command maps to a real skill or action (deck/onboard/brief present)', () => {
+// The BARE slash-command surface. A plugin SKILL is only addressable as
+// `/mothy:<name>` — the CLI namespaces plugin skills (`Plugin skills use
+// plugin:skill`). A bare `/deck` exists ONLY because commands/deck.md does.
+// So deleting a shim silently removes the short name every teammate types,
+// while `claude plugin details` still lists the skill and the plugin UI still
+// shows it — the failure is invisible from every diagnostic we had.
+//
+// This list is the published contract (mirrored in CLAUDE.md > Layout).
+// Sampling 3 of them is NOT enough: commit ba6a62f deleted 10 shims and this
+// test caught it only via `deck`, and that red was shipped anyway. Enumerate
+// the whole surface so the diff shows exactly which short names would die.
+const EXPECTED_COMMANDS = [
+  'article',
+  'brief',
+  'build',
+  'connect',
+  'deck',
+  'fix',
+  'onboard',
+  'plan',
+  'test',
+  'video',
+  'video-setup',
+];
+
+test('the full bare slash-command surface is present (no shim silently dropped)', () => {
   const cmdDir = join(pluginRoot, 'commands');
   const cmdNames = readdirSync(cmdDir)
     .filter((f) => f.endsWith('.md'))
-    .map((f) => basename(f, '.md'));
-  // The shipped command surface — guard that none silently disappears.
-  for (const expected of ['deck', 'onboard', 'brief']) {
+    .map((f) => basename(f, '.md'))
+    .sort();
+  const missing = EXPECTED_COMMANDS.filter((c) => !cmdNames.includes(c));
+  assert.deepEqual(
+    missing,
+    [],
+    `missing bare slash commands (users type these): ${missing.join(', ')} — found: ${cmdNames.join(', ')}`,
+  );
+});
+
+test('every command shim points at a skill directory that exists', () => {
+  // A shim whose target skill was renamed/removed is a dead short name: the
+  // command resolves, then instructs the model to invoke a skill that is gone.
+  const cmdDir = join(pluginRoot, 'commands');
+  const skillsDir = join(pluginRoot, 'skills');
+  const skillDirs = new Set(
+    readdirSync(skillsDir).filter((d) => statSync(join(skillsDir, d)).isDirectory()),
+  );
+  for (const f of readdirSync(cmdDir).filter((f) => f.endsWith('.md'))) {
+    const body = readFileSync(join(cmdDir, f), 'utf8');
+    // Shims write the target either bare or bolded: "Invoke the **connect** skill".
+    const m = /Invoke the \*{0,2}([a-z0-9-]+)\*{0,2} skill/i.exec(body);
+    assert.ok(m, `${f}: expected an "Invoke the <skill> skill" line`);
     assert.ok(
-      cmdNames.includes(expected),
-      `expected command "${expected}.md" (found: ${cmdNames.join(', ')})`,
+      skillDirs.has(m[1]),
+      `${f}: targets skill "${m[1]}" which has no skills/${m[1]}/ directory`,
     );
   }
 });

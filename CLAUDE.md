@@ -48,6 +48,22 @@ Mothy is two cooperating surfaces — never confuse them
   `/brief`, `/deck`, `/video`, `/article`, `/video-setup`, `/onboard`, plus the
   engineering set `/plan`, `/build`, `/test`, `/fix`).
   Frontmatter + a one-line invoke of the matching skill. **No logic here.**
+
+  > **These shims are NOT duplicates of the same-named skills — do not "de-dupe"
+  > them.** A plugin SKILL is only addressable by its *namespaced* name
+  > (`/mothy:fix`); the CLI says so outright — *"Plugin skills use
+  > `plugin:skill`"*. The bare `/fix` everyone actually types exists **only**
+  > because `commands/fix.md` does. Deleting a shim removes the short name while
+  > the plugin UI and `claude plugin details` still list the skill, so the loss is
+  > invisible from every diagnostic we have.
+  >
+  > Beware `claude plugin details`: it counts **commands and skills together
+  > under "Skills (N)"** — `brief` is a command yet appears in that list. 14
+  > skills + 11 shims reads as "Skills (25)" and looks like every name is
+  > registered twice. That is a counting artifact, not a collision. Misreading
+  > it caused `ba6a62f`, which deleted 10 shims and broke every bare slash
+  > command for the whole team; reverted in `0.4.2` and now pinned by
+  > `EXPECTED_COMMANDS` in `tests/manifest.test.mjs`.
 - `plugins/mothy/skills/<name>/SKILL.md` — **canonical** skill orchestration
   (connect, customer-brief, deck, edit-in-place, video, article, video-setup,
   onboard, dev-setup, plus the engineering skills plan / build / test / fix).
