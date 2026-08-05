@@ -147,6 +147,67 @@ step — not an afterthought:
 3. **Thresholds fixed BEFORE the run** — decided in the plan, not tuned afterwards to whatever the new output happens to score.
 4. **A recorded result** — metric values, fixture set, ground-truth source, threshold, pass/fail — as an acceptance criterion of the unit that ships it.
 
+### Model provenance — which pool pays, and for what
+
+An eval has three distinct roles, and they have OPPOSITE right answers. Conflating
+them is how a cheap eval quietly becomes a fake one.
+
+| Role | Which model | Which pool pays | Why |
+|---|---|---|---|
+| **System under test** | PRODUCTION parity — the model the shipped code actually calls | whatever production costs | Substituting changes *what you are measuring* |
+| **Judge / grader** | A subscription-backed model (one you already pay a flat rate for) — prefer a STRONG one | the flat-rate pool | Ground truth must be independent of the SUT. Stronger is *better* here; it is the structural opposite of a self-oracle |
+| **Fixture / adversarial-input authoring** | Subscription-backed | the flat-rate pool | No parity concern at all — red-teaming a prompt is exactly what a strong model is for |
+
+**Never spend metered per-call API budget on the judge or the fixtures.** That is
+what a flat-rate subscription is for. And where production is already a local or
+otherwise free model, the SUT costs nothing either — the cheapest option and the
+highest-parity option are the same option, so there is no tradeoff to optimize.
+
+**SUT substitution is DEFAULT-DENY.** If production parity genuinely cannot be
+had, record ONE line naming (a) the property being measured, (b) that the
+substitute is weaker-or-equal to production, and (c) that the property is not
+parity-locked. The *direction* is the whole argument: a STRONGER substitute
+biases optimistic — green tells you nothing about production — while a WEAKER
+substitute biases pessimistic, so a green there is *stronger* evidence than
+production would have given.
+
+**Parity-locked properties — never substitute, at any price.** These are
+properties of the model×prompt PAIR, not of the prompt:
+
+- prompt-injection resistance
+- instruction-following fidelity
+- output-format / JSON compliance
+- degeneracy and looping
+
+A stronger model masks the defect completely. A small model's rewrite degeneracy
+is invisible on a large one; an injection fixture that a frontier model shrugs
+off says nothing about the small model actually serving the call.
+
+**The agent RUNS the script; the agent is NOT the model.** An agent told to eval
+"on the subscription" will read the fixtures, reason about them itself, and
+report metrics *with the production code path never executed*. That is a
+FABRICATED eval, and in a report it is indistinguishable from a real one — the
+same decoupling as the self-oracle. Subscription inference may serve the judge
+and author the fixtures; the SUT always goes through the real production call
+path (real provider chain, real prompt, real runner script).
+
+**Report `sut_model`.** Every eval result records which model actually served the
+system under test. An eval that cannot say what served it is not evidence. This
+is also the check that catches a STALE-CODE run: an eval executed against a
+checkout or host that has not picked up the change grades the OLD behavior and
+reports a meaningless green.
+
+**Two tiers.** Subscription-backed judge in the inner loop (every commit, drift
+detection, fixture wiring). Parity SUT at the ship gate, and on ANY
+model/provider/parameter change.
+
+**Cost note — the model choice is not the biggest lever.** What the eval runs
+*against* usually dominates. An eval battery pointed at a live production agent
+carrying its full tool schema pays that schema on every single call; pointing it
+at a dedicated eval twin instead can save an order of magnitude more than any
+model swap. Give that twin EMPTY fallbacks, so an eval fails loud rather than
+silently switching models mid-battery.
+
 ## When to use
 
 The user says one of:

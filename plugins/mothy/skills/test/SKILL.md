@@ -318,8 +318,48 @@ const real = await agent(`${CAVEMAN_ULTRA}\n\n${BRIEF}\n\nFrom the matrix layer=
 return { matrix, written, audits, real }
 ```
 
+## Auditing an EVAL (when the subsystem has one)
+
+An eval is a test, so every principle above applies to it — and evals fail the
+same way tests do, only more quietly, because a metric that reads 0.93 *looks*
+like evidence. Audit the eval whenever the subsystem under test has one.
+
+1. **Would this eval go RED on the regression it exists to catch?** (Principle 1
+   applied to evals.) Mutation-test it: reintroduce the known-bad behaviour,
+   re-run, and confirm the metric drops BELOW threshold. An eval that stays green
+   on a known-bad prompt is green theater, and it is the most common shape of
+   eval failure.
+2. **Is the ground truth INDEPENDENT of the system under test?** (Audit the
+   auditor.) The oracle must not be the thing being graded, nor a sibling of it.
+   A self-oracle degrades in lockstep with the system, so the metric stays green
+   while quality rots. Curated hand-labelled fixtures, a separate judge, or human
+   labels — never "run it and grade it with itself."
+3. **Did the SYSTEM UNDER TEST actually execute?** The failure mode unique to
+   agent-run evals: an agent reads the fixtures, reasons about them itself, and
+   reports metrics with the production code path never invoked. That is a
+   FABRICATED eval and it is indistinguishable from a real one in a report. Look
+   for a recorded `sut_model` and evidence the real runner ran.
+4. **Did it run against the code under test, or against stale code?** An eval
+   executed on a checkout or host that has not picked up the change grades the
+   OLD behaviour and reports a meaningless green. Verify the tree/commit it ran
+   against.
+5. **Were the thresholds pre-registered, or tuned to the observed result?** A bar
+   moved after seeing the number is not a bar. Check the history of the threshold
+   constants against the history of the results.
+6. **Model provenance.** The SUT runs on production parity; the judge and the
+   fixtures may be subscription-backed and SHOULD prefer a strong model. A
+   STRONGER-than-production SUT biases optimistic and is the dangerous direction
+   — especially for parity-locked properties (prompt-injection resistance,
+   instruction-following, output-format compliance, degeneracy/looping), which
+   are properties of the model×prompt PAIR and which a stronger model masks
+   entirely. See the matching section in `/plan`, `/build` and `/fix`.
+
+Report eval findings alongside test findings. An eval that cannot fail is a
+finding of the same severity as a test that cannot fail.
+
 ## Rules
 
+- **Audit the eval too** (Auditing an EVAL §). If the subsystem has an eval, it is a test artifact and gets the same treatment: mutation-test it (would it go RED on the regression it exists to catch?), confirm the ground truth is independent of the system under test, confirm the SUT actually executed through the production path rather than an agent reasoning over the fixtures, confirm it ran against the code under test and not stale code, and confirm the thresholds were pre-registered rather than tuned to the result.
 - **Compact sub-agent output** (§0.4). Code/test-source/errors/schemas exact.
 - **Detect, don't assume** (§0.1). Read the repo's `CLAUDE.md` / `AGENTS.md` / `CONTRIBUTING.md` / `README.md` **if present**; their rules override this skill. Their absence is normal.
 - **Never hardcode a test command** (§0.2). If it can't be detected, ask. Never report a suite as green when nothing ran.
