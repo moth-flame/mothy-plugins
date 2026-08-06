@@ -157,7 +157,13 @@ Match the model to the job rather than to a fixed lineup — use whatever tiers
 the current environment actually offers:
 
 - **Cheap/fast worker tier** — mechanical, well-specified work: writing the reproduction test, running the suite, grep passes, applying a named one-line change. High volume, low judgment.
-- **Strong/expensive critic tier** — the adversarial verifier (§4.5), root-cause synthesis when scouts disagree, and the escalation decision. These are the calls where a weak model silently blesses a bandaid, and they are a small fraction of total calls.
+- **Strong/expensive critic tier** — the adversarial verifier (§4.5), the conformance reviewer (§6.5), root-cause synthesis when scouts disagree, and the escalation decision. These are the calls where a weak model silently blesses a bandaid, and they are a small fraction of total calls.
+
+The two critics are distinct roles and neither substitutes for the other: the
+adversarial verifier asks *is this a root-cause fix or a bandaid* from
+`{diff, rubric, types}` alone, while the conformance reviewer asks *does this
+actually resolve the bug that was reported*. Run both as separate agents even
+when only one tier is available.
 
 Do not assume a specific model is available. If only one tier exists, run
 everything there and say so; the discipline, not the model list, is what makes
@@ -504,6 +510,34 @@ and add hits as `BugClassHuntSchema` findings before the stop check:
 Adapt the patterns to the repo's language — the classes are universal, the
 syntax is not.
 
+### 6.5. Conformance review (MANDATORY — once, after regression)
+
+Verifier isolation (§4.5) is deliberate and stays exactly as written: the
+adversarial verifier sees `{diff, rubric, types}` and never the reproduction
+test, which is the only reason its verdict carries signal. That isolation has a
+consequence, though — **a reviewer who has never seen the bug report cannot tell
+you whether the reported bug is actually gone.** It judges the fix against a
+rubric, not against the complaint that started the run.
+
+So once the verifier and the full regression are clean, run ONE more agent, the
+**conformance reviewer**: *does the shipped fix satisfy what the bug report
+asked, and is it consistent with the diagnosis it claims to act on?*
+
+- **A separate role, not a replacement.** It does not redo §4.5 and never relaxes it. It runs last, once, after regression.
+- **Label it `conformance:`** — never `verify:` / `review:` / `critique:`. Those labels belong to the isolated verifier, and blurring them invites someone to "helpfully" hand that verifier the reproduction test later.
+- **Seeing the bug report is CORRECT for this agent, not a bias leak.** The report is its measuring stick, not evidence the fix is right. It still may not treat "the suite is green" or "the reproduction passes" as proof that the reported problem is resolved — a reproduction can be narrower than the complaint.
+- **Strong/expensive critic tier** (§0.5) — this is the judgment call where a partial fix gets waved through as done.
+- **Inputs — deliberately the full picture, that is the point:** the original bug report and symptom as reported, the diagnosed root cause, the fix diff, the verifier verdict, the regression summary (floor vs new), and the follow-ups the fix deliberately deferred.
+- **Output: a severity-ranked triage, worst first.** Each finding names what the report asked, what the fix delivers, and the gap. Deferred follow-ups get checked too: are they real, are they captured, and is any of them actually part of the reported bug rather than adjacent to it?
+- **No independent veto.** It hands you findings; you own the commit decision. But an unresolved `critical` conformance finding blocks the commit exactly like an unresolved verifier finding.
+
+**What it is actually for: a fix reported as complete that isn't.** The common
+shape is a change that was *necessary but not sufficient* — the reproduction
+goes green, the verifier finds no bandaid, regression stays clean, and the
+report gets written as closed, because every one of those checks is scoped
+below the level of the original complaint. The conformance reviewer is the only
+agent in the run holding that complaint.
+
 ### 7. Write up the fix
 
 **Follow the repo's own convention if it has one** (a fix-log directory, a
@@ -569,6 +603,7 @@ After the fix lands:
 - **Blast radius** — files touched (count) + siblings checked.
 - **Verifier verdict** — X/15 if applicable.
 - **Regression** — full suite final state (floor vs new); say plainly if a browser/E2E gate was skipped because the repo has none.
+- **Conformance triage (§6.5)** — findings raised against the original report, and how each was resolved or why it was accepted.
 - **Follow-ups** — adjacent issues left out of scope.
 - **Not fixed + reason** — if the bug was not reproducible or escalated after 3 rounds.
 - **What's next** — the fix is committed locally; ask the user whether to push, and follow whatever the repo's deploy convention says once they answer.
@@ -610,7 +645,8 @@ export const meta = {
     { title: 'Reproduce' },
     { title: 'Diagnose' },
     { title: 'Fix + verify' },
-    { title: 'Regression' }
+    { title: 'Regression' },
+    { title: 'Conformance' }
   ]
 }
 
@@ -881,7 +917,58 @@ if (rIter === 3 && (!regression.regression_green || merged.overall_verdict !== '
   return { escalated: true, regression, merged, repro, fix, verdict }
 }
 
-return { fixed: true, repro, rootCause, fix, verdict, regression, iteration, rIter }
+// ────────────────────────────────────────────────────────────────
+// Phase 5 — Conformance review (§6.5). Different axis from the verifier:
+// "does this resolve the REPORTED bug", which the isolated verifier never saw.
+// Strong critic tier if available (§0.5). Label `conformance:`, NEVER `verify:`.
+// ────────────────────────────────────────────────────────────────
+
+phase('Conformance')
+
+const conformance = await agent(
+  `${CAVEMAN_ULTRA}\n\n` +
+  `Conformance reviewer — NOT a code verifier. Question: does shipped fix satisfy the ORIGINAL bug report, ` +
+  `and is it consistent with the diagnosis it claims to act on? Green suite / green repro is NOT proof ` +
+  `the reported problem is resolved — a repro can be narrower than the complaint.\n\n` +
+  `ORIGINAL BUG REPORT:\n${BUG}\n\n` +
+  `DIAGNOSED ROOT CAUSE:\n${JSON.stringify(rootCause)}\n\n` +
+  `FIX DIFF:\n${fix.diff}\n\n` +
+  `VERIFIER VERDICT:\n${JSON.stringify(verdict)}\n\n` +
+  `REGRESSION (floor vs new):\n${JSON.stringify(regression)}\n\n` +
+  `DEFERRED FOLLOW-UPS:\n${JSON.stringify(fix.follow_ups || [])}\n\n` +
+  `Check deferred items too: real? captured? actually part of the reported bug rather than adjacent? ` +
+  `Rank findings worst-first. Each: what the report asked, what the fix delivers, the gap. ` +
+  `You have NO veto — emit a triage for the orchestrator.`,
+  {
+    label: 'conformance',
+    phase: 'Conformance',
+    schema: {
+      type: 'object',
+      required: ['conforms', 'orchestrator_brief', 'findings'],
+      properties: {
+        conforms: { type: 'boolean' },
+        orchestrator_brief: { type: 'string' },
+        findings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['severity', 'reported', 'delivered', 'gap'],
+            properties: {
+              severity: { enum: ['critical', 'high', 'medium', 'low'] },
+              reported: { type: 'string' },
+              delivered: { type: 'string' },
+              gap: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  }
+)
+
+// Unresolved `critical` conformance finding → do not commit; surface to the user.
+
+return { fixed: true, repro, rootCause, fix, verdict, regression, iteration, rIter, conformance }
 ```
 
 ## Rules
@@ -891,6 +978,7 @@ return { fixed: true, repro, rootCause, fix, verdict, regression, iteration, rIt
 - **Minimal blast radius.** Smallest change at the root cause. No refactors, renames, reformats, new abstractions, opportunistic cleanup, or scope creep. Touch the fewest files. A second bug is a second /fix.
 - **Revert-check non-negotiable** for standard/risky. Revert the fix → reproduction fails again → re-apply → passes. Proves the fix is load-bearing and the test isn't over-fitted.
 - **Adversarial verifier non-negotiable** for standard/risky. A different agent from reproduce+fix. **Sees only {diff, rubric, types}. NEVER the reproduction test, test output, author identity, prior-agent reasoning, or regression output** — that isolation is why the verdict carries signal (§4.5).
+- **Conformance review before the commit (§6.5).** One more agent, labeled `conformance:` and never `verify:`, reads the original bug report alongside the fix and asks the question the isolated verifier structurally cannot: is the reported bug actually resolved? Separate from the adversarial verifier, and not a replacement for it. No veto — you own the commit decision — but an unresolved `critical` finding blocks it.
 - **Verifier veto.** Unresolved high+ findings after 3 rework rounds → escalate to the user. Do NOT commit through. Do NOT pile guards on a mis-identified root cause — loop back to diagnosis.
 - **Full regression every time, single new failure blocks.** Use the command detected in §0.2, never a hardcoded one. Separate new failures from the pre-existing floor.
 - **Never hardcode a test command** (§0.2). If it can't be detected, ask.

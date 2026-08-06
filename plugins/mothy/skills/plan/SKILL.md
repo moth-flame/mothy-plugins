@@ -131,7 +131,13 @@ compression is for sub-agent output only.
 Match the model to the job rather than to a fixed lineup:
 
 - **Cheap/fast worker tier** — the independent role plans. Many parallel calls, each well-scoped by its focus block.
-- **Strong/expensive critic tier** — the synthesis, conflict resolution, and any adversarial review of the resulting plan. Few calls, highest leverage.
+- **Strong/expensive critic tier** — the pre-synthesis conformance cross-check (Protocol 5.5), the synthesis and conflict resolution, and any adversarial review of the resulting plan. Few calls, highest leverage.
+
+The conformance cross-check is a distinct role from the synthesis, not an
+earlier draft of it: it maps where the role plans contradict each other and
+which brief requirements no role addressed, and it never authors the plan.
+Synthesis stays yours. Run it as its own agent even when only one tier is
+available.
 
 Do not assume a specific model is available. If only one tier exists, run
 everything there and say so.
@@ -315,7 +321,18 @@ const PLAN_SCHEMA = {
 
 5. **Write role-specific focus blocks** — each agent's `focus` is 6–10 specific bullet questions for that role. Don't let "architecture" plan everything; constrain each role to its domain, or you get N identical generic plans.
 
-6. **Synthesize yourself** — when the role plans come back, YOU review them. Do NOT delegate synthesis to another agent: you carry the full conversation context, the sub-agents do not. Produce:
+5.5. **Cross-check the role plans against the brief — the conformance reviewer (MANDATORY).** When the plans come back and BEFORE you synthesize, run one agent whose only job is: *does this set of plans actually answer the brief, and do the plans agree with each other?*
+
+   - **A separate role from synthesis, and it never authors the plan.** It produces a map — nothing more. You synthesize, because you carry the conversation and it does not.
+   - **Label it `conformance:`** — never `verify:` / `review:` / `critique:`. Those labels belong to the isolated adversarial critics elsewhere in this toolchain (in /build and /fix a verifier is shown a diff, a rubric and types and deliberately nothing else, so that it cannot rationalize "the tests pass, must be fine"). This agent is the opposite by design: **it is handed the brief, because "was the ask answered" is a question you structurally cannot ask of a reviewer who never saw the ask.** Seeing the requirements is correct here, not a bias leak — and the labels stay distinct so nobody later "helpfully" feeds an isolated verifier the requirements too.
+   - **Strong/expensive critic tier** (§0.5) — reading N plans against a brief and finding the contradiction nobody stated is exactly where a weak model produces a summary instead of a cross-check.
+   - **Inputs:** the shared brief (requirements + constraints), every role plan in full, and any decisions already locked.
+   - **Output: a severity-ranked triage, worst first** — (a) where two roles propose incompatible things, naming both; (b) which brief requirements NO role addressed; (c) which plans are thin or hand-wave the hard part. Plus a short brief you read FIRST, so synthesis starts from a conflict map instead of you rebuilding it by hand from seven documents.
+   - **No veto, no authorship.** It hands you findings; you resolve them and own the final plan. But an unresolved `critical` finding — a requirement nothing covers, a contradiction nobody picked — blocks handing the plan to /build as final.
+
+   **What it is actually for: a squad that reports done without answering the ask.** Every role can return a competent, internally-consistent plan for the slice it was given and still, collectively, leave the actual request unaddressed — because no single role was ever asked to hold the whole brief. This agent is.
+
+6. **Synthesize yourself** — when the role plans come back, YOU review them, starting from the conformance brief (5.5) rather than rebuilding the conflict map by hand. Do NOT delegate synthesis to another agent: you carry the full conversation context, the sub-agents do not. Produce:
    - **Consensus** — what most roles agreed on
    - **Conflicts** — where roles disagreed, and the resolution, with reasoning
    - **Gaps** — what no role covered that still matters
@@ -335,7 +352,7 @@ harness has no parallel sub-agents (§0.3).
 export const meta = {
   name: 'squad-<short-topic-slug>',
   description: 'Multi-role independent planning for <topic>',
-  phases: [{ title: 'Independent planning' }]
+  phases: [{ title: 'Independent planning' }, { title: 'Conformance' }]
 }
 
 const BRIEF = `<full self-contained context — agents see no other conversation>`
@@ -356,7 +373,43 @@ const plans = await parallel(ROLES.map(({ name, focus }) => () =>
   })
 ))
 
-return { plans: plans.filter(Boolean) }
+// Pre-synthesis conformance cross-check (Protocol 5.5). Sees the brief ON PURPOSE —
+// "was the ask answered" needs the ask. Strong critic tier if available (§0.5).
+// Label `conformance:`, NEVER `verify:`. It maps conflicts; it never writes the plan.
+phase('Conformance')
+const conformance = await agent(
+  `${CAVEMAN_ULTRA}\n\nConformance reviewer — cross-check ALL role plans vs the brief and vs each other. ` +
+  `Do NOT write a plan.\n\nBRIEF:\n${BRIEF}\n\nROLE PLANS:\n${JSON.stringify(plans.filter(Boolean))}\n\n` +
+  `Emit worst-first: role-vs-role contradictions (name both), brief requirements NO role addressed, ` +
+  `plans that hand-wave the hard part. You have NO veto — this is a triage for the orchestrator.`,
+  {
+    label: 'conformance',
+    phase: 'Conformance',
+    schema: {
+      type: 'object',
+      required: ['conforms', 'orchestrator_brief', 'findings'],
+      properties: {
+        conforms: { type: 'boolean' },
+        orchestrator_brief: { type: 'string' },
+        findings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['severity', 'kind', 'detail'],
+            properties: {
+              severity: { enum: ['critical', 'high', 'medium', 'low'] },
+              kind: { enum: ['contradiction', 'unaddressed_requirement', 'thin_plan'] },
+              roles: { type: 'array', items: { type: 'string' } },
+              detail: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  }
+)
+
+return { plans: plans.filter(Boolean), conformance }
 ```
 
 If the harness returns a run handle, capture it and persist it with the run
@@ -370,6 +423,7 @@ state (§0.3) before doing anything else — the run is detached and resumable.
 - **Parallel, not sequential — and independent either way.** Role agents MUST not see each other's plans during the planning stage; independence is the entire value. In the sequential fallback, still withhold prior plans.
 - **Self-contained brief.** Sub-agents have no conversation history. The brief includes everything they need, or they will hallucinate it.
 - **Constrain each role.** Role focus = specific bullet questions, not "plan this."
+- **Conformance cross-check before synthesis** (Protocol 5.5). One agent, labeled `conformance:` and never `verify:`, reads the brief alongside every role plan and answers the question no isolated critic can — was the ask answered, and do the plans agree? It is given the requirements on purpose; that is its measuring stick. It never authors the plan and has no veto, but an unresolved `critical` finding blocks handing the plan to /build as final.
 - **You synthesize.** The final plan is your job, not a synthesis agent's — you have the context they don't.
 - **Don't dump raw plans on the user.** The synthesis is the deliverable; mention specific dissents and gaps inline.
 - **Skip if the task is trivial.** A single file read, a factual question, a status check — answer inline. A squad is for design-level decisions.

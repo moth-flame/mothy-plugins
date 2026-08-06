@@ -158,7 +158,13 @@ Match the model to the job rather than to a fixed lineup — use whatever tiers
 the current environment actually offers:
 
 - **Cheap/fast worker tier** — mechanical, well-specified work: writing a failing test to a stated criterion, implementing to a decided shape, running suites, grep passes. High volume, low judgment.
-- **Strong/expensive critic tier** — the adversarial impl-verifier (§4.5), the test-auditor (§4.7), and the escalation decision. These are the calls where a weak model rubber-stamps, and they are a small fraction of total calls.
+- **Strong/expensive critic tier** — the adversarial impl-verifier (§4.5), the test-auditor (§4.7), the conformance reviewer (§6.6), and the escalation decision. These are the calls where a weak model rubber-stamps, and they are a small fraction of total calls.
+
+Those three critics are distinct roles on distinct axes, and none of them
+substitutes for another: the impl-verifier asks *is this code correct* from
+`{diff, rubric, types}` alone, the test-auditor asks *would these tests fail on
+a broken impl*, and the conformance reviewer asks *is this what was asked for*.
+Run each as its own agent even when only one tier is available.
 
 Do not assume a specific model is available. If only one tier exists, run
 everything there and say so; the discipline, not the model list, is what makes
@@ -524,6 +530,33 @@ has no browser setup, skip this and say so.
 preview and hitting live endpoints with real auth. That is /test's `verify-real`
 mode. /build's footprint stays local.
 
+### 6.6. Conformance review (MANDATORY — once, after regression)
+
+Verifier isolation (§4.5) is deliberate and stays exactly as written: the
+impl-verifier sees `{diff, rubric, types}` and nothing else, which is the only
+reason its verdict carries signal. That isolation has a consequence, though —
+**a reviewer who has never seen the request cannot tell you whether the request
+was answered.** Nothing in §4.5–§6.5 asks that question at all.
+
+So once the per-unit verifiers and the regression pass are clean, run ONE more
+agent, the **conformance reviewer**, over the whole change: *does the delivered
+work actually satisfy what was asked, and is it internally consistent across
+units?*
+
+- **A separate role, not a replacement.** It does not redo §4.5 or §4.7 and never relaxes them. It runs last, once, across all units.
+- **Label it `conformance:`** — never `verify:` / `review:` / `critique:`. Those labels belong to the isolated critics, and blurring them invites someone to "helpfully" hand the isolated verifier the requirements later.
+- **Seeing the ask is CORRECT for this agent, not a bias leak.** The requirements are its measuring stick, not evidence that the code is right. It still obeys the bias rule the test-auditor obeys: **a green suite is never evidence.** "Regression passed" answers a different question than "this is what was asked for."
+- **Strong/expensive critic tier** (§0.5) — a judgment call spanning the whole change is exactly where a weak model rubber-stamps.
+- **Inputs — deliberately the full picture, that is the point:** the plan / acceptance criteria the run started from, the cumulative diff across all units, the per-unit verifier and test-audit verdicts, the regression summary (floor vs new), and any real-boundary or rendered-screenshot notes from §6.5.
+- **Output: a severity-ranked triage, worst first.** Each finding names the requirement, what was delivered instead, and the gap — plus a short brief you read FIRST, before the raw unit write-ups.
+- **No independent veto.** It hands you findings; you decide and own the call. But an unresolved `critical` conformance finding blocks the commit exactly like an unresolved verifier finding — the decision is yours, the standard is not.
+
+**What it is actually for: work reported as complete that isn't.** A unit whose
+change was *necessary but not sufficient* passes its own tests, satisfies an
+isolated verifier, survives regression, and gets written up as done — because
+every one of those checks is scoped below the level of the original ask. The
+conformance reviewer is the only agent in the run holding that ask.
+
 ### 7. Write up each unit
 
 **Follow the repo's own convention if it has one** (a fix-log directory, a
@@ -581,6 +614,7 @@ After all units land:
 - Tests added (file paths + count)
 - Regression suite final state (floor vs new); say plainly if a browser/E2E gate was skipped because the repo has none
 - Real boundaries exercised, and any left unproven
+- **Conformance triage (§6.6)** — findings raised, and how each was resolved or why it was accepted
 - Units NOT shipped + reason (including any escalated after 3 rework rounds)
 - **What's next** — everything is committed locally; ask the user whether to push, and follow the repo's deploy convention once they answer
 - Any unresolved open questions
@@ -616,7 +650,8 @@ export const meta = {
   phases: [
     { title: 'Classify' },
     { title: 'Unit work' },
-    { title: 'Regression + fix' }
+    { title: 'Regression + fix' },
+    { title: 'Conformance' }
   ]
 }
 
@@ -850,7 +885,54 @@ if (iteration === 3 && merged.overall_verdict !== 'pass') {
   return { escalated: true, verdicts: unit_verdicts, merged, regression }
 }
 
-return { units: indepResults.flat(), regression, iteration, verdicts: unit_verdicts, merged }
+// ────────────────────────────────────────────────────────────────
+// Phase 4 — Conformance review (§6.6). Different axis from the verifier:
+// "is this what was asked for", which the isolated verifier never saw.
+// Strong critic tier if available (§0.5). Label `conformance:`, NEVER `verify:`.
+// ────────────────────────────────────────────────────────────────
+
+phase('Conformance')
+
+const conformance = await agent(
+  `${CAVEMAN_ULTRA}\n\n` +
+  `Conformance reviewer — NOT a code verifier. Question: does delivered work satisfy the ask, ` +
+  `and is it internally consistent across units? Green suite is NOT evidence.\n\n` +
+  `PLAN / ACCEPTANCE CRITERIA:\n${PLAN}\n\n` +
+  `CUMULATIVE DIFF (all units):\n${CUMULATIVE_DIFF}\n\n` +
+  `PER-UNIT VERDICTS (verifier + test-audit):\n${JSON.stringify(unit_verdicts)}\n\n` +
+  `REGRESSION (floor vs new):\n${JSON.stringify(regression)}\n\n` +
+  `Rank findings worst-first. Each: requirement, what was delivered instead, the gap. ` +
+  `You have NO veto — emit a triage for the orchestrator.`,
+  {
+    label: 'conformance',
+    phase: 'Conformance',
+    schema: {
+      type: 'object',
+      required: ['conforms', 'orchestrator_brief', 'findings'],
+      properties: {
+        conforms: { type: 'boolean' },
+        orchestrator_brief: { type: 'string' },
+        findings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['severity', 'requirement', 'delivered', 'gap'],
+            properties: {
+              severity: { enum: ['critical', 'high', 'medium', 'low'] },
+              requirement: { type: 'string' },
+              delivered: { type: 'string' },
+              gap: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  }
+)
+
+// Unresolved `critical` conformance finding → do not commit; surface to the user.
+
+return { units: indepResults.flat(), regression, iteration, verdicts: unit_verdicts, merged, conformance }
 ```
 
 ## Rules
@@ -866,6 +948,7 @@ return { units: indepResults.flat(), regression, iteration, verdicts: unit_verdi
 - **Real boundary tested locally (§6.5).** Any unit that writes under real constraints exercises the actual boundary — `NOT NULL` / `CHECK` / `UNIQUE` / access-policy / trigger bugs pass every mock. If it can't run here, name the unproven boundary explicitly.
 - **Live user-render before commit — when the repo has a browser setup and the change is user-facing.** A delegated agent drives the local app, walks the real flow + negative/gating cases, saves screenshots; you read them and judge the rendered result before committing. Green static specs are not enough.
 - **LLM-call eval gate** (§0.6) when a unit touches a prompt/model/call parameters — real-model eval, ground truth independent of the system under test, thresholds fixed before the run.
+- **Conformance review before the commit (§6.6).** One more agent, labeled `conformance:` and never `verify:`, reads the original ask alongside the cumulative diff and asks the question the isolated verifier structurally cannot: is this what was asked for? Separate from the impl-verifier and the test-auditor, replacing neither. No veto — you triage its findings — but an unresolved `critical` one blocks the commit.
 - **Verifier veto is non-negotiable.** Unresolved high+ findings (impl R-rubric OR test T-rubric) after 3 rework rounds → escalate to the user. Do NOT commit through.
 - **Same-commit rule.** Test + impl + write-up land together. No splitting across commits.
 - **No bypass.** No `--no-verify`, `--amend`, `--force`, `git add -A`. Pre-commit hook failure = fix the underlying issue, re-stage, new commit.

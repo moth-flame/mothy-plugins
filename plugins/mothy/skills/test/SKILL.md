@@ -99,9 +99,12 @@ here requires a Workflow or Task tool.**
 
 **Model tiering by role, not by name:** use a cheap/fast tier for authoring
 tests to a stated matrix row and for running suites, and a stronger/expensive
-tier for the adversarial test-audit and the escalation call. Do not assume a
-particular model is available; if only one tier exists, run everything there and
-say so.
+tier for the adversarial test-audit (§4), the conformance review (§6.5) and the
+escalation call. The audit critic and the conformance reviewer are distinct
+roles on distinct axes — one asks *would this test fail on a broken impl*, the
+other asks *was the coverage that was promised actually delivered* — so run both
+even when only one tier exists. Do not assume a particular model is available;
+if only one tier exists, run everything there and say so.
 
 ## §0.4 — Compact sub-agent output (recommended)
 
@@ -230,6 +233,33 @@ From the matrix's `layer: integration | live` rows, identify the **single highes
 
 > **This section is the soul of the skill.** In practice, when a suite is "all green" but ships bugs, ~every one of those bugs was a `layer: live` row that was never run. Default to running at least one.
 
+### 6.5. Conformance review (MANDATORY — once, before the report)
+
+The test-critic in §4 is aimed at a single test's assertion: *would this still
+pass if the implementation were wrong?* It is a per-test question, and a suite
+can answer it perfectly for every test it contains while **silently not
+containing the tests that were promised.** Nobody in §2–§6 is asked whether the
+delivered suite matches the matrix that justified it.
+
+So after the audit and the real-boundary pass, run ONE more agent — the
+**conformance reviewer** — over the whole deliverable: *was every matrix row
+actually written, do the escalations line up with the requirements, and is
+anything internally inconsistent?*
+
+- **A separate role, not a replacement.** It does not redo §4 and never relaxes it. Different axis, run last, once.
+- **Label it `conformance:`** — never `verify:` / `review:` / `critique:`. Those labels belong to the isolated adversarial critics in this toolchain (in /build a verifier is shown a diff, a rubric and types and deliberately nothing else, so it cannot rationalize "the tests pass, must be fine"). This agent is the opposite by design: **it is handed the matrix and the spec, because "was what was asked for delivered" is a question you structurally cannot put to a reviewer who never saw the ask.** Seeing them is correct here, not a bias leak — and keeping the labels distinct stops anyone later deciding an isolated verifier should see the requirements too.
+- **The one bias rule it still keeps: a green suite is never evidence.** Same rule §4 lives by. "Everything passes" says nothing about whether the missing row was written.
+- **Stronger/expensive tier** (§0.3) — spotting the row that quietly never became a file is a judgment call a weak model reads past.
+- **Inputs — deliberately the full picture, that is the point:** the coverage matrix, the spec/requirements, the list of tests actually written with their audit verdicts, the escalated/`live` rows, and the real-boundary + regression result.
+- **Output: a severity-ranked triage, worst first** — each finding naming the matrix row or requirement, what the suite actually delivers for it, and the gap. Plus a short brief you read FIRST, before the per-area audit verdicts.
+- **No veto.** It hands you findings; you own the report and any hand-off to /fix. But an unresolved `critical` finding — a matrix row with no test and no tombstone — means the suite is not done, whatever the run summary says.
+
+**What it is actually for: coverage reported as delivered that isn't.** An area
+can be authored, audited sound, and reported complete while covering less than
+the matrix row it was dispatched from — every check along the way is scoped to
+the tests that exist, never to the ones that were supposed to. The conformance
+reviewer is the only agent holding the original matrix at the end.
+
 ### 7. Floor-based regression + report
 
 Run the full suite with the command detected in §0.2. Separate **new** failures
@@ -242,6 +272,7 @@ failures (T-10). Report:
 - Audit verdicts (T-classes found + fixed; surviving mutations, if any).
 - Real-boundary result (executed live: PASS/FAIL with evidence; or flagged with the run command).
 - Regression: floor vs new.
+- **Conformance triage (§6.5)** — matrix rows or requirements the suite does not actually cover, and how each was resolved or why it was accepted.
 - **Honest residual risk**: the boundaries still unproven and the one test that would close the biggest gap.
 
 ### 8. Commit locally if the user asked; ask before pushing
@@ -265,7 +296,7 @@ from a literal.
 export const meta = {
   name: 'test-<target-slug>',
   description: 'Coverage-matrix → red-green tests → adversarial test-audit → mutation probe → real-boundary smoke for <target>',
-  phases: [{ title: 'Coverage matrix' }, { title: 'Author' }, { title: 'Audit' }, { title: 'Real-boundary + regression' }]
+  phases: [{ title: 'Coverage matrix' }, { title: 'Author' }, { title: 'Audit' }, { title: 'Real-boundary + regression' }, { title: 'Conformance' }]
 }
 
 // Detected per §0.2 — NEVER a hardcoded literal. E2E_CMD may be null.
@@ -315,7 +346,17 @@ phase('Real-boundary + regression')
 const real = await agent(`${CAVEMAN_ULTRA}\n\n${BRIEF}\n\nFrom the matrix layer=live|integration rows pick the HIGHEST-value test mocks cannot cover. EXECUTE it against the real substrate (real/dev DB or a deployed preview with real auth): hit the actual boundary, assert the real row / policy denial / status, then CLEAN UP. If infra is missing, output the exact command to run + which boundaries stay unproven. Then run the full suite with: ${TEST_CMD}. Separate NEW failures from the pre-existing/environmental floor. Report floor vs new.`,
   { label:'real+regression', phase:'Real-boundary + regression', schema:{ type:'object', required:['live_result','floor','new_failures','unproven_boundaries'], properties:{ live_result:{type:'string'}, floor:{type:'number'}, new_failures:{type:'array',items:{type:'string'}}, unproven_boundaries:{type:'array',items:{type:'string'}} } } })
 
-return { matrix, written, audits, real }
+phase('Conformance')
+// Different axis from the audit (§6.5): "was the promised coverage delivered".
+// Sees the matrix + spec ON PURPOSE. Stronger tier if available. Label `conformance:`, NEVER `verify:`.
+const conformance = await agent(`${CAVEMAN_ULTRA}\n\nConformance reviewer — NOT the test-audit critic. Question: was every matrix row actually written, do escalations match the requirements, is anything internally inconsistent? A green suite is NOT evidence.\n\nMATRIX:\n${JSON.stringify(matrix)}\n\nSPEC:\n${BRIEF}\n\nTESTS WRITTEN:\n${JSON.stringify(written.filter(Boolean))}\n\nAUDIT VERDICTS:\n${JSON.stringify(audits.filter(Boolean))}\n\nREAL-BOUNDARY + REGRESSION:\n${JSON.stringify(real)}\n\nRank worst-first. Each finding: the matrix row / requirement, what the suite delivers for it, the gap. You have NO veto — emit a triage for the orchestrator.`,
+  { label:'conformance', phase:'Conformance', schema:{ type:'object', required:['conforms','orchestrator_brief','findings'], properties:{
+    conforms:{type:'boolean'}, orchestrator_brief:{type:'string'},
+    findings:{ type:'array', items:{ type:'object', required:['severity','matrix_row','delivered','gap'],
+      properties:{ severity:{enum:['critical','high','medium','low']}, matrix_row:{type:'string'},
+        delivered:{type:'string'}, gap:{type:'string'} } } } } } })
+
+return { matrix, written, audits, real, conformance }
 ```
 
 ## Auditing an EVAL (when the subsystem has one)
@@ -370,6 +411,7 @@ finding of the same severity as a test that cannot fail.
 - **Expected from the spec, never the impl** (T-02). If you must derive expected from behavior, you are writing a change-detector, not a test — say so.
 - **Audit the tests adversarially** (§4). The critic's null hypothesis is "this suite is theater." It never uses "green" as evidence.
 - **Name the surviving mutation.** Every theater finding must come with the concrete impl change the test fails to catch. No hand-waving.
+- **Conformance review before the report** (§6.5). One more agent, labeled `conformance:` and never `verify:`, reads the coverage matrix and the spec alongside the delivered suite and asks the question the per-test audit cannot: was the coverage that was promised actually written? Separate from the audit critic, replacing neither, and still forbidden to treat "green" as evidence. No veto — but a matrix row with no test and no tombstone means the suite is not done.
 - **Run at least one real-boundary test** (§6) or state plainly which boundaries are unproven. A green mocked suite never implies the real seam works.
 - **Cross-tenant matrix is mandatory** for any org/anon/multi-user surface: foreign cred → zero / 403.
 - **Floor-based regression** (§7): gate is no-NEW-failures, after separating the pre-existing/environmental floor.
