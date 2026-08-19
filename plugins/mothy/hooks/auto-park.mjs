@@ -71,17 +71,29 @@ function main() {
 
   if (!transcript) return note(out, 'UNAVAILABLE — the hook received no transcript path.');
 
-  let convo;
+  let convo, seen;
   try {
-    convo = extractConversation(readTail(transcript, TAIL_BYTES));
+    const tail = readTail(transcript, TAIL_BYTES);
+    seen = extractConversationDetailed(tail);
+    convo = seen.text;
   } catch (e) {
     return note(out, `UNAVAILABLE — could not read the transcript (${short(e)}).`);
   }
 
-  // Nothing worth paying for. Not an error, and not silence either: say so, so
-  // an empty section is never mistaken for a failed one.
+  // A transcript with content but NOT ONE recognised message is a PARSER
+  // FAILURE, not a quiet session — the shape is not what we expect, and every
+  // future run will fail identically and silently. Reporting it as "nothing
+  // much happened" is how a defect becomes permanent.
+  if (seen.lines > 0 && seen.messages === 0) {
+    return note(out, `UNAVAILABLE — read ${seen.lines} transcript lines and recognised `
+      + '0 of them as messages. The transcript format is not what this hook expects.');
+  }
+
+  // Genuinely short. Not an error, and not silence either — and it now says
+  // WHAT IT SAW, so a future reader can tell a quiet session from a blind one.
   if (convo.length < 400) {
-    return note(out, 'Not written — too little conversation to be worth summarizing.');
+    return note(out, `Not written — only ${convo.length} characters of conversation `
+      + `(${seen.messages} of ${seen.lines} lines parsed as messages). Too little to summarize.`);
   }
 
   const clipped = convo.length > MAX_PROMPT_CHARS ? convo.slice(-MAX_PROMPT_CHARS) : convo;
@@ -125,10 +137,21 @@ function readTail(path, n) {
  * mid-line.
  */
 export function extractConversation(jsonl) {
+  return extractConversationDetailed(jsonl).text;
+}
+
+/**
+ * As above, but also reports HOW MUCH it understood — `lines` considered and
+ * `messages` recognised. The caller needs those to tell a short session from a
+ * transcript it cannot read; both produce very little text.
+ */
+export function extractConversationDetailed(jsonl) {
   const lines = String(jsonl).split('\n').slice(1);
   const parts = [];
+  let considered = 0;
   for (const line of lines) {
     if (!line.trim()) continue;
+    considered += 1;
     let d;
     try { d = JSON.parse(line); } catch { continue; }
     const role = d.type;
@@ -145,7 +168,7 @@ export function extractConversation(jsonl) {
     if (text.startsWith('<system-reminder>') || text.startsWith('<local-command')) continue;
     parts.push(`${role === 'user' ? 'USER' : 'ASSISTANT'}: ${text}`);
   }
-  return parts.join('\n\n');
+  return { text: parts.join('\n\n'), messages: parts.length, lines: considered };
 }
 
 const PROMPT = `You are writing a handoff note that will be read AFTER this conversation is

@@ -115,7 +115,7 @@ test('an unreadable transcript is recorded, not silently skipped', () => {
 test('a trivial conversation says so rather than paying for a summary', () => {
   const dir = scaffold();
   const out = run(dir, { transcript_path: transcriptIn(dir, jsonl(say('user', 'hi'))) });
-  assert.match(out, /too little conversation/);
+  assert.match(out, /Too little to summarize/);
 });
 
 test('RECURSION GUARD: a marked child does nothing at all', () => {
@@ -213,4 +213,37 @@ test('finds claude when PATH does not include it', () => {
   const out = readFileSync(join(dir, '.claude', 'precompact-reasoning.md'), 'utf8');
   assert.ok(!/ENOENT/.test(out), `still could not launch claude:\n${out}`);
   assert.match(out, /Decided/);
+});
+
+// A short session and an unreadable transcript are DIFFERENT FACTS and must
+// not print the same sentence. Measured 2026-08-19 on Desktop: the file said
+// "too little conversation to be worth summarizing", and nothing in it could
+// distinguish "Rich sent three short messages" from "the JSONL shape is not
+// what extractConversation expects, so it parsed nothing at all". The second
+// is a defect that would look identical forever.
+test('the too-little bail reports what it actually saw', () => {
+  const dir = scaffold();
+  const out = run(dir, {
+    transcript_path: transcriptIn(dir, jsonl(say('user', 'hi'))),
+    cwd: dir, hook_event_name: 'PreCompact',
+  });
+  assert.match(out, /\b1 of 1 lines\b/, 'must say how many JSONL lines parsed as messages');
+  assert.match(out, /\b\d+ characters\b/, 'must say how much prose it extracted');
+});
+
+// The specific unreadable case: well-formed JSONL, zero recognised messages.
+// Same character count as a tiny session (0), completely different meaning.
+test('zero recognised messages is reported as unrecognised, not as short', () => {
+  const dir = scaffold();
+  const alien = 'DROPPED\n' + [
+    { kind: 'human', body: 'a'.repeat(500) },
+    { kind: 'ai', body: 'b'.repeat(500) },
+  ].map((r) => JSON.stringify(r)).join('\n');
+  const out = run(dir, {
+    transcript_path: transcriptIn(dir, alien), cwd: dir, hook_event_name: 'PreCompact',
+  });
+  assert.match(out, /UNAVAILABLE/,
+    'no recognised messages in a non-empty transcript is a parser failure, not a quiet session');
+  assert.ok(!/Too little to summarize/.test(out),
+    'reporting a parse failure as "nothing much happened" is the exact defect');
 });
