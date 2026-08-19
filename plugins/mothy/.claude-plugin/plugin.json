@@ -1,6 +1,6 @@
 {
   "name": "mothy",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Moth+Flame team agent \u2014 briefs, decks, intel search, Google Workspace in-place edits, onboarding. Sign in with your @mothandflamevr.com Google account.",
   "author": {
     "name": "Moth+Flame",
@@ -18,5 +18,32 @@
     "article",
     "demo",
     "compaction"
-  ]
+  ],
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/precompact-snapshot.sh\" 2>/dev/null || true",
+            "timeout": 10,
+            "statusMessage": "Snapshotting state before compaction..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/post-compaction-notice.sh\" 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
 }

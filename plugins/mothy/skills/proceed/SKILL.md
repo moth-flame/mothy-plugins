@@ -167,6 +167,21 @@ cross it, which may be mid-thought. Parking is the deliberate version. Use both:
 Done this way auto-compaction rarely fires as a surprise, because you have already
 compacted deliberately before reaching the threshold.
 
+### The automatic floor (installed with this plugin)
+
+This plugin also ships two hooks, so a forgotten park is not a total loss:
+
+- **PreCompact** writes `.claude/precompact-state.md` — the objective state
+  (branch, last commit, unpushed commits, uncommitted tracked changes) captured
+  immediately before every compaction, automatic or manual.
+- **UserPromptSubmit** announces that file ONCE on the first turn after a
+  compaction, then goes quiet.
+
+**This is a floor, not a substitute.** A hook is a shell command, not the
+assistant — it cannot write down reasoning, rejected approaches, or why a
+choice was made. Only §1 does that, and only when asked. An empty section in
+that file means "not recorded", never "nothing was happening".
+
 ---
 
 ## §4 — Anti-patterns
