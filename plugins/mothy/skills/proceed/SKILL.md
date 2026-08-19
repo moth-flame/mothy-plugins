@@ -169,35 +169,7 @@ compacted deliberately before reaching the threshold.
 
 ---
 
-## §4 — Coordination watchers (skip unless your project has one)
-
-**Skip this section entirely if `.claude/coord/watch-inbox.sh` does not exist in the
-project.** Most projects do not use file-based cross-repo coordination and there is
-nothing to own.
-
-If it does: **never `pkill -f "watch-inbox.sh"`**, or any unanchored pattern kill. Every
-participating project runs a watcher with the same script name, invoked by relative path,
-so the project path never appears in its argv — an unanchored pattern matches *every*
-project's watcher, and anchoring the pattern to a path does not help. **The working
-directory is the only reliable discriminator.**
-
-This is not hypothetical: an unanchored kill has taken out sibling projects' watchers,
-which then had to be noticed and restarted by hand. Kill by PID, with cwd verified:
-
-```bash
-HERE="$(pwd -P)"
-for p in $(pgrep -f "watch-inbox.sh"); do
-  cwd=$(lsof -a -p "$p" -d cwd -Fn 2>/dev/null | grep '^n' | sed 's/^n//')
-  if [ "$cwd" = "$HERE" ]; then kill "$p" && echo "killed $p (cwd verified)"; fi
-done
-```
-
-Enumerate and *read the list* before killing anything. If a PID's cwd comes back empty,
-**skip it** — an unresolvable cwd is not evidence it belongs here.
-
----
-
-## §5 — Anti-patterns
+## §4 — Anti-patterns
 
 - **Running PARK and RESUME in one invocation.** They are alternatives, not a sequence.
 - **Launching anything new in PARK mode** — an agent, a build, a browser session, a live
