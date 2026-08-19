@@ -167,20 +167,41 @@ cross it, which may be mid-thought. Parking is the deliberate version. Use both:
 Done this way auto-compaction rarely fires as a surprise, because you have already
 compacted deliberately before reaching the threshold.
 
-### The automatic floor (installed with this plugin)
+### It is automatic — you do not have to remember (installed with this plugin)
 
-This plugin also ships two hooks, so a forgotten park is not a total loss:
+The point of auto-compaction is that nobody watches for the right moment. So
+the capture does not depend on anyone saying the words. Three hooks ship here:
 
-- **PreCompact** writes `.claude/precompact-state.md` — the objective state
-  (branch, last commit, unpushed commits, uncommitted tracked changes) captured
-  immediately before every compaction, automatic or manual.
-- **UserPromptSubmit** announces that file ONCE on the first turn after a
+- **PreCompact / snapshot** — writes `.claude/precompact-state.md`: branch,
+  last commit, unpushed commits, uncommitted tracked changes. Deterministic.
+- **PreCompact / auto-park** — reads the conversation transcript and spends one
+  cheap model call to append **what was decided and why, what was rejected,
+  what is still open, and what is believed but unverified**. This is the half a
+  summary loses.
+- **UserPromptSubmit** — announces the file ONCE on the first turn after a
   compaction, then goes quiet.
 
-**This is a floor, not a substitute.** A hook is a shell command, not the
-assistant — it cannot write down reasoning, rejected approaches, or why a
-choice was made. Only §1 does that, and only when asked. An empty section in
-that file means "not recorded", never "nothing was happening".
+**Never blocks a compaction, ever.** Every path exits 0. A compaction fires
+when context is full, so anything that delays it stalls the session at exactly
+the moment it can least afford it.
+
+**A failure is written down, not skipped.** If the model call fails, times out,
+or the transcript is unreadable, the section says so. An absent section would
+read as *"nothing was happening"* — which on a handoff note is a lie the reader
+cannot detect.
+
+Kill switch: `MOTHY_AUTOPARK=0`. Model: `MOTHY_AUTOPARK_MODEL` (default a small
+fast one).
+
+### So when do you still park by hand?
+
+Only when it is worth more than the automatic version. Auto-park recovers
+reasoning **after the fact** from a transcript; §1 captures it from the
+assistant that actually lived the work, and additionally lands finished work
+and stops anything half-started. That is better, and it is what you want before
+a deliberate handoff, an account switch, or at the end of something delicate.
+
+For ordinary sessions, do nothing. That is the design.
 
 ---
 

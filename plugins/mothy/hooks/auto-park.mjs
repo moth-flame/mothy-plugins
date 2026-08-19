@@ -1,0 +1,199 @@
+#!/usr/bin/env node
+// auto-park.mjs — the REASONING half of a park, written automatically.
+//
+// WHY THIS EXISTS. Parking only helps if someone remembers to ask for it, and
+// the entire point of auto-compaction is that nobody has to watch for the right
+// moment. So the reasoning capture cannot depend on a human saying the words.
+//
+// PreCompact receives `transcript_path`: the whole conversation, on disk, at
+// the moment before it is summarized away. This reads a bounded tail of it and
+// spends one cheap model call to write down what a summary reliably loses —
+// what was decided and why, what was tried and rejected, what is still open,
+// and what is believed but unverified.
+//
+// It runs AFTER the deterministic snapshot and APPENDS to the same file, so
+// there is exactly one place to look afterwards.
+//
+// ── The rules it must not break ────────────────────────────────────────────
+//
+// FAIL OPEN, ALWAYS. Exits 0 on every path. A compaction fires when context is
+// full; anything that delays or blocks it stalls the session at exactly the
+// moment it can least afford it.
+//
+// UNAVAILABLE IS NOT ABSENT. If the model call fails, times out, or returns
+// junk, the section is written saying so. A missing section would read as
+// "nothing was going on", which is the failure this whole feature exists to
+// prevent.
+//
+// NO RECURSION. `claude -p` is itself Claude Code and would fire this hook
+// again. The child is marked, and a marked process exits immediately.
+//
+// NO TOOLS. The child gets the transcript on stdin and is given no tools, so it
+// cannot read files, run commands, or touch the repo. It writes prose or
+// nothing.
+
+import { readFileSync, appendFileSync, mkdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const RECURSION_MARK = 'MOTHY_AUTOPARK_CHILD';
+const TAIL_BYTES = 4 * 1024 * 1024;   // how much of the transcript file to read
+const MAX_PROMPT_CHARS = 40_000;      // what we are willing to pay to summarize
+const TIMEOUT_MS = 90_000;
+const MODEL = process.env.MOTHY_AUTOPARK_MODEL || 'fable';
+
+const OFF_VALUES = new Set(['0', 'off', 'false', 'no']);
+
+function main() {
+  // Recursion guard FIRST — before any work at all.
+  if (process.env[RECURSION_MARK]) return;
+
+  const raw = String(process.env.MOTHY_AUTOPARK ?? '').trim().toLowerCase();
+  if (OFF_VALUES.has(raw)) return;
+
+  let hook = {};
+  try { hook = JSON.parse(readStdin() || '{}'); } catch { hook = {}; }
+
+  const root = process.env.CLAUDE_PROJECT_DIR || hook.cwd || process.cwd();
+  const out = join(root, '.claude', 'precompact-state.md');
+  const transcript = hook.transcript_path;
+
+  if (!transcript) return note(out, 'UNAVAILABLE — the hook received no transcript path.');
+
+  let convo;
+  try {
+    convo = extractConversation(readTail(transcript, TAIL_BYTES));
+  } catch (e) {
+    return note(out, `UNAVAILABLE — could not read the transcript (${short(e)}).`);
+  }
+
+  // Nothing worth paying for. Not an error, and not silence either: say so, so
+  // an empty section is never mistaken for a failed one.
+  if (convo.length < 400) {
+    return note(out, 'Not written — too little conversation to be worth summarizing.');
+  }
+
+  const clipped = convo.length > MAX_PROMPT_CHARS ? convo.slice(-MAX_PROMPT_CHARS) : convo;
+  const truncated = clipped.length < convo.length;
+
+  let text;
+  try {
+    text = askModel(clipped);
+  } catch (e) {
+    return note(out, `UNAVAILABLE — the summarizing model call failed (${short(e)}).`);
+  }
+  if (!text) return note(out, 'UNAVAILABLE — the summarizing model returned nothing.');
+
+  const header = truncated
+    ? `_Model-written from the last ${MAX_PROMPT_CHARS.toLocaleString()} characters of the conversation `
+      + `(earlier turns not seen). Recovered after the fact — weaker than a deliberate park._`
+    : '_Model-written from the conversation. Recovered after the fact — weaker than a deliberate park._';
+
+  write(out, `\n## What was going on (auto-captured)\n\n${header}\n\n${text.trim()}\n`);
+}
+
+/** Read the LAST n bytes of a file without loading a 65 MB transcript. */
+function readTail(path, n) {
+  const size = statSync(path).size;
+  const start = Math.max(0, size - n);
+  const len = size - start;
+  const fd = openSync(path, 'r');
+  try {
+    const buf = Buffer.allocUnsafe(len);
+    readSync(fd, buf, 0, len, start);
+    return buf.toString('utf8');
+  } finally { closeSync(fd); }
+}
+
+/**
+ * Pull the human/assistant PROSE out of the JSONL and drop everything else.
+ *
+ * Tool calls and their results are the overwhelming bulk of a transcript and
+ * the least useful part here — a file listing does not explain a decision. The
+ * first line is dropped unread because a byte-offset tail almost always lands
+ * mid-line.
+ */
+export function extractConversation(jsonl) {
+  const lines = String(jsonl).split('\n').slice(1);
+  const parts = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    let d;
+    try { d = JSON.parse(line); } catch { continue; }
+    const role = d.type;
+    if (role !== 'user' && role !== 'assistant') continue;
+    const content = d?.message?.content;
+    let text = '';
+    if (typeof content === 'string') text = content;
+    else if (Array.isArray(content)) {
+      text = content.filter((b) => b && b.type === 'text').map((b) => b.text || '').join('\n');
+    }
+    text = text.trim();
+    if (!text) continue;
+    // System-injected reminders are noise here and can be long.
+    if (text.startsWith('<system-reminder>') || text.startsWith('<local-command')) continue;
+    parts.push(`${role === 'user' ? 'USER' : 'ASSISTANT'}: ${text}`);
+  }
+  return parts.join('\n\n');
+}
+
+const PROMPT = `You are writing a handoff note that will be read AFTER this conversation is
+compacted into a lossy summary. The summary will keep conclusions and drop the evidence and
+reasoning under them; your job is to preserve exactly what it loses.
+
+Write these sections, briefly, in markdown. Omit any section you have no real content for —
+never pad, never invent, never restate the summary.
+
+**Decided** — decisions made and the reason for each.
+**Rejected** — approaches tried or considered and abandoned, and why. This is the most
+valuable section: without it the next session re-explores them.
+**Open** — what is unfinished, and what the next step was going to be.
+**Unverified** — anything believed or asserted but not actually checked. Be specific.
+
+Rules: no preamble, no sign-off. Under 400 words. If the conversation genuinely contains
+none of this, output exactly: NOTHING SUBSTANTIVE TO RECORD.`;
+
+function askModel(convo) {
+  const res = spawnSync(
+    'claude',
+    ['-p', PROMPT, '--model', MODEL, '--allowed-tools', ''],
+    {
+      input: `<conversation>\n${convo}\n</conversation>`,
+      encoding: 'utf8',
+      timeout: TIMEOUT_MS,
+      env: { ...process.env, [RECURSION_MARK]: '1' },
+    },
+  );
+  if (res.error) throw res.error;
+  if (res.status !== 0) throw new Error(`exit ${res.status}`);
+  const t = String(res.stdout || '').trim();
+  if (!t || /^NOTHING SUBSTANTIVE TO RECORD/i.test(t)) return '';
+  return t;
+}
+
+function readStdin() {
+  try { return readFileSync(0, 'utf8'); } catch { return ''; }
+}
+function short(e) {
+  return String((e && e.message) || e).slice(0, 120).replace(/\n/g, ' ');
+}
+function write(out, body) {
+  // A project with no .claude/ yet would otherwise lose the note silently —
+  // which is the exact failure this file exists to prevent, wearing a
+  // filesystem costume.
+  try { mkdirSync(dirname(out), { recursive: true }); } catch { /* fail open */ }
+  try { appendFileSync(out, body); } catch { /* fail open */ }
+}
+function note(out, why) {
+  write(out, `\n## What was going on (auto-captured)\n\n**${why}**\n\n`
+    + 'This section not being here would have read as "nothing was happening". It is here, '
+    + 'saying it could not be written, so that distinction survives.\n');
+}
+
+// Entrypoint guard — the pure helpers above are imported by tests, and running
+// a compaction hook on import would be its own kind of surprise.
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+  try { main(); } catch { /* fail open */ }
+  process.exit(0);
+}

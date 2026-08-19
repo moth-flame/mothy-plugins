@@ -8,6 +8,12 @@
           "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/precompact-snapshot.sh\" 2>/dev/null || true",
           "timeout": 10,
           "statusMessage": "Snapshotting state before compaction..."
+        },
+        {
+          "type": "command",
+          "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/auto-park.mjs\" 2>/dev/null || true",
+          "timeout": 100,
+          "statusMessage": "Capturing what was going on..."
         }
       ]
     }
