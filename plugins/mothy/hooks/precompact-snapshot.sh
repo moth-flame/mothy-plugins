@@ -15,7 +15,39 @@
 # session at exactly the moment it cannot afford it.
 set -u
 
-ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+# WHERE TO WRITE. The hook payload carries `cwd` — the project Claude Code is
+# actually working in — and that is the only source here that KNOWS rather than
+# infers. `git rev-parse --show-toplevel` does not fail when it is wrong: it
+# returns whatever repo the hook happens to be standing in, which on Desktop
+# was the plugin's own marketplace checkout (2026-08-19, measured). The file
+# landed there, invisible to the user, and would have been erased by the next
+# plugin update.
+#
+# Order: explicit env, then the payload, then a guess.
+#
+# `read -t` is a bash BUILTIN. `timeout` is GNU coreutils and does NOT exist on
+# macOS, where all of this actually runs — using it would have made this whole
+# fix silently inert on the only platform in play, failing back to the guess it
+# was written to replace, with nothing to say so.
+PAYLOAD=""
+if [ ! -t 0 ]; then IFS= read -r -d '' -t 2 PAYLOAD || true; fi
+HOOK_CWD="$(printf '%s' "$PAYLOAD" \
+  | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+
+ROOT="${CLAUDE_PROJECT_DIR:-}"
+[ -n "$ROOT" ] || ROOT="$HOOK_CWD"
+[ -n "$ROOT" ] || ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+# Never write inside our own installation, whatever produced the answer above.
+# A park file there is invisible to the user AND destroyed by the next update —
+# strictly worse than not writing one, because the project then looks like the
+# hook never ran. Falling back to pwd can be wrong; it cannot be silently
+# swallowed by a directory the user never opens.
+case "${CLAUDE_PLUGIN_ROOT:-}" in
+  "") ;;
+  *) case "$ROOT" in "$CLAUDE_PLUGIN_ROOT"*) ROOT="$(pwd)" ;; esac ;;
+esac
+
 OUT="$ROOT/.claude/precompact-state.md"
 mkdir -p "$ROOT/.claude" 2>/dev/null || exit 0
 

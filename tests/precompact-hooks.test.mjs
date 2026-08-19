@@ -109,3 +109,51 @@ test('both hooks exit 0 when the project directory is unwritable', () => {
     chmodSync(dir, 0o700);
   }
 });
+
+// ── Live Desktop run, 2026-08-19: the snapshot wrote to the wrong repo ──────
+//
+// Rich compacted a session on ~/Documents/hooktest2. The file landed at
+//
+//   ~/.claude/plugins/marketplaces/mothy-marketplace/.claude/precompact-state.md
+//
+// i.e. inside the plugin's OWN marketplace checkout. CLAUDE_PROJECT_DIR was
+// unset, the hook's cwd was inside that checkout, and it is itself a git repo —
+// so `git rev-parse --show-toplevel` returned a confident, wrong answer. The
+// project looked exactly as though hooks had never run, and the file would have
+// been destroyed by the next plugin update.
+//
+// The authoritative answer was on stdin the whole time: the hook payload's
+// `cwd`. The script simply never read it.
+// Behavioural, not a source grep. The first version of this test asserted the
+// string HOOK_CWD appeared in the script — and would have stayed green over a
+// fix that was completely inert, because the implementation reached for GNU
+// `timeout`, which macOS does not have. A test that cannot tell a working fix
+// from a dead one is not a guard.
+test('snapshot prefers the hook payload cwd over a guessed git root', () => {
+  const decoy = mkdtempSync(join(tmpdir(), 'decoy-repo-'));   // stands in for the marketplace checkout
+  const project = mkdtempSync(join(tmpdir(), 'real-project-'));
+  execFileSync('git', ['init', '-q'], { cwd: decoy });
+
+  execFileSync('bash', [join(HOOKS, 'precompact-snapshot.sh')], {
+    cwd: decoy,                                              // where the hook happens to stand
+    input: JSON.stringify({ cwd: project, hook_event_name: 'PreCompact' }),
+    encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: '', CLAUDE_PLUGIN_ROOT: '' },
+  });
+
+  assert.ok(existsSync(join(project, '.claude', 'precompact-state.md')),
+    'the payload named the project; the snapshot must land there');
+  assert.ok(!existsSync(join(decoy, '.claude', 'precompact-state.md')),
+    'git rev-parse resolved the decoy repo — that answer must lose to the payload');
+});
+
+// The guard that catches this whole CLASS rather than this one instance. Any
+// resolution strategy can land inside the plugin's own directory; none of them
+// should ever be allowed to write there.
+test('both hooks refuse to write inside the plugin directory', () => {
+  for (const f of ['precompact-snapshot.sh', 'auto-park.mjs']) {
+    assert.match(readFileSync(join(HOOKS, f), 'utf8'), /CLAUDE_PLUGIN_ROOT/,
+      `${f} must refuse a resolved root inside CLAUDE_PLUGIN_ROOT — a park file `
+      + 'there is invisible to the user and erased by the next plugin update');
+  }
+});

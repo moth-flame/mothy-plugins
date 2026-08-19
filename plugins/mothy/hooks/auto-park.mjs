@@ -60,7 +60,12 @@ function main() {
   let hook = {};
   try { hook = JSON.parse(readStdin() || '{}'); } catch { hook = {}; }
 
-  const root = process.env.CLAUDE_PROJECT_DIR || hook.cwd || process.cwd();
+  // Same ordering as the snapshot script, and the same refusal: never write
+  // inside our own installation. See precompact-snapshot.sh for the measured
+  // Desktop case that made this necessary.
+  let root = process.env.CLAUDE_PROJECT_DIR || hook.cwd || process.cwd();
+  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
+  if (pluginRoot && resolve(root).startsWith(resolve(pluginRoot))) root = process.cwd();
   const out = join(root, '.claude', 'precompact-reasoning.md');
   const transcript = hook.transcript_path;
 
