@@ -19,16 +19,30 @@ ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}
 SNAP="$ROOT/.claude/precompact-state.md"
 SEEN="$ROOT/.claude/.precompact-state.seen"
 
-[ -f "$SNAP" ] || exit 0
-if [ -f "$SEEN" ] && [ ! "$SNAP" -nt "$SEEN" ]; then exit 0; fi
+# Two files, two writers, on purpose: the snapshot opens with `>` and
+# auto-park appends, and nothing guarantees they do not overlap.
+REASON="$ROOT/.claude/precompact-reasoning.md"
+
+[ -f "$SNAP" ] || [ -f "$REASON" ] || exit 0
+if [ -f "$SEEN" ] \
+   && [ ! "$SNAP" -nt "$SEEN" ] \
+   && [ ! "$REASON" -nt "$SEEN" ]; then exit 0; fi
 
 cat <<'MSG'
-A compaction just happened. Before trusting anything you appear to remember:
-read .claude/precompact-state.md — it holds the objective state (commits,
-unpushed work, uncommitted changes) captured immediately beforehand. It does
-NOT contain reasoning or rejected approaches; an empty section means "not
-recorded", never "nothing was happening". Re-verify any conclusion that is
-load-bearing for what you do next rather than assuming it.
+A compaction just happened. Before trusting anything you appear to remember,
+read these two files — both captured immediately beforehand:
+
+  .claude/precompact-state.md      objective state: branch, unpushed commits,
+                                   uncommitted changes. Mechanical, always
+                                   accurate, no reasoning.
+  .claude/precompact-reasoning.md  what was decided and why, what was tried and
+                                   rejected, what is open, what is unverified.
+                                   Written by a model, so weaker than a
+                                   deliberate park — treat it as a lead.
+
+A missing file, or a section marked UNAVAILABLE, means "not recorded" — never
+"nothing was happening". Re-verify any conclusion that is load-bearing for what
+you do next rather than assuming it.
 MSG
 
 : > "$SEEN" 2>/dev/null || true

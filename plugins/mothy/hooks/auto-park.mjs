@@ -11,8 +11,13 @@
 // what was decided and why, what was tried and rejected, what is still open,
 // and what is believed but unverified.
 //
-// It runs AFTER the deterministic snapshot and APPENDS to the same file, so
-// there is exactly one place to look afterwards.
+// It writes its OWN file next to the snapshot, and never the snapshot itself.
+// That is not tidiness — the snapshot opens with `>` (truncate), this appends,
+// and NOTHING guarantees they do not overlap: the hooks are deliberately
+// declared in two places (we do not know which one a given Claude Code version
+// reads) and nothing documents that hooks in one matcher run sequentially. A
+// live run on 2026-08-19 ended mid-word, `urvives.`, the stranded tail of this
+// script's own note. Two writers, one file. Now: one writer each.
 //
 // ── The rules it must not break ────────────────────────────────────────────
 //
@@ -32,7 +37,7 @@
 // cannot read files, run commands, or touch the repo. It writes prose or
 // nothing.
 
-import { readFileSync, appendFileSync, mkdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { readFileSync, appendFileSync, mkdirSync, statSync, openSync, readSync, closeSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,7 +61,7 @@ function main() {
   try { hook = JSON.parse(readStdin() || '{}'); } catch { hook = {}; }
 
   const root = process.env.CLAUDE_PROJECT_DIR || hook.cwd || process.cwd();
-  const out = join(root, '.claude', 'precompact-state.md');
+  const out = join(root, '.claude', 'precompact-reasoning.md');
   const transcript = hook.transcript_path;
 
   if (!transcript) return note(out, 'UNAVAILABLE — the hook received no transcript path.');
@@ -154,9 +159,42 @@ valuable section: without it the next session re-explores them.
 Rules: no preamble, no sign-off. Under 400 words. If the conversation genuinely contains
 none of this, output exactly: NOTHING SUBSTANTIVE TO RECORD.`;
 
+/**
+ * Find the `claude` binary.
+ *
+ * A hook does not inherit a login shell's PATH. On this machine `claude` lives
+ * in ~/.npm-global/bin, so a bare spawnSync('claude') is ENOENT and the whole
+ * feature fails open forever while looking like it merely had nothing to say.
+ * Measured, not guessed: `env -i PATH=/usr/bin:/bin node auto-park.mjs` gave
+ * "the summarizing model call failed (spawnSync claude ENOENT)".
+ *
+ * PATH is still tried FIRST — an explicitly-installed binary should win over
+ * anything we hardcode. The list is a fallback, not an override.
+ */
+export function resolveClaudeBin(env = process.env, exists = existsSync) {
+  const explicit = env.MOTHY_AUTOPARK_CLAUDE_BIN;
+  if (explicit) return explicit;
+  const home = env.HOME || '';
+  for (const dir of String(env.PATH || '').split(':')) {
+    if (dir && exists(join(dir, 'claude'))) return join(dir, 'claude');
+  }
+  const candidates = [
+    `${home}/.npm-global/bin/claude`,
+    `${home}/.local/bin/claude`,
+    `${home}/.claude/local/claude`,
+    `${home}/.bun/bin/claude`,
+    '/opt/homebrew/bin/claude',
+    '/usr/local/bin/claude',
+  ];
+  for (const c of candidates) if (home || !c.startsWith('/Users')) { if (exists(c)) return c; }
+  // Nothing found. Return the bare name so the failure is the familiar ENOENT
+  // rather than a new one — and so a PATH we failed to parse still gets a shot.
+  return 'claude';
+}
+
 function askModel(convo) {
   const res = spawnSync(
-    'claude',
+    resolveClaudeBin(),
     ['-p', PROMPT, '--model', MODEL, '--allowed-tools', ''],
     {
       input: `<conversation>\n${convo}\n</conversation>`,

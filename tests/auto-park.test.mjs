@@ -48,7 +48,9 @@ function run(dir, hookInput, extraEnv = {}) {
     encoding: 'utf8',
     env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}`, CLAUDE_PROJECT_DIR: dir, ...extraEnv },
   });
-  const out = join(dir, '.claude', 'precompact-state.md');
+  // auto-park owns this file. It is NOT the snapshot's — see the two
+  // regression tests at the bottom for why that separation is load-bearing.
+  const out = join(dir, '.claude', 'precompact-reasoning.md');
   return existsSync(out) ? readFileSync(out, 'utf8') : '';
 }
 
@@ -131,18 +133,84 @@ test('kill switch MOTHY_AUTOPARK=0 writes nothing', () => {
 test('exits 0 even when the model binary does not exist at all', () => {
   const dir = mkdtempSync(join(tmpdir(), 'autopark-nobin-'));
   const t = transcriptIn(dir, jsonl(say('user', LONG)));
-  // No fake claude on PATH: spawn fails. Must still exit 0 and record the fact.
+  // No claude anywhere: spawn fails. Must still exit 0 and record the fact.
   // process.execPath, not 'node' — PATH is deliberately empty in this test.
+  //
+  // HOME is redirected too. Without that, resolveClaudeBin correctly finds the
+  // REAL ~/.npm-global/bin/claude and the test spends four seconds calling the
+  // actual model — a hermeticity break the PATH-only version could not have,
+  // and a live reminder that the fallback list works.
   execFileSync(process.execPath, [SCRIPT], {
     input: JSON.stringify({ transcript_path: t }),
     encoding: 'utf8',
-    env: { ...process.env, PATH: '/nonexistent', CLAUDE_PROJECT_DIR: dir },
+    env: { ...process.env, PATH: '/nonexistent', HOME: dir, CLAUDE_PROJECT_DIR: dir },
   });
-  assert.match(readFileSync(join(dir, '.claude', 'precompact-state.md'), 'utf8'), /UNAVAILABLE/);
+  assert.match(readFileSync(join(dir, '.claude', 'precompact-reasoning.md'), 'utf8'), /UNAVAILABLE/);
 });
 
 test('the summarizing child is given no tools', () => {
   const src = readFileSync(SCRIPT, 'utf8');
   assert.match(src, /'--allowed-tools', ''/,
     'the child reads a transcript on stdin and writes prose — it must not be able to touch anything');
+});
+
+// ── Two defects found by a real Claude Code run, 2026-08-19 ─────────────────
+//
+// Rich ran a live session, said a recall word, and compacted. The file ended:
+//
+//     (unavailable)
+//     ```
+//     urvives.
+//
+// `urvives.` is the tail of THIS script's UNAVAILABLE note ("...so that
+// distinction survives."), stranded past the end of a shorter write. Two
+// separate bugs, each independently fatal to the feature.
+
+// DEFECT 1 — the shared file. This script appends to the same path the
+// snapshot script opens with `>`. Whether the two overlap depends on things
+// we do not control and partly do not want to control: the hooks are declared
+// in BOTH hooks/hooks.json and plugin.json on purpose (we do not know which
+// one a given Claude Code version reads), and nothing documents that hooks in
+// one matcher run sequentially rather than in parallel.
+//
+// So the ordering assumption was never ours to make. Own a separate file
+// instead: then a duplicate registration costs a duplicate section, which is
+// ugly and harmless, rather than a silently half-erased one.
+test('writes its own file, never the one the snapshot truncates', () => {
+  const dir = scaffold();
+  const shared = join(dir, '.claude', 'precompact-state.md');
+  mkdirSync(join(dir, '.claude'), { recursive: true });
+  writeFileSync(shared, '# Pre-compaction snapshot\nMECHANICAL FACTS ONLY\n');
+  const before = readFileSync(shared, 'utf8');
+
+  run(dir, { transcript_path: transcriptIn(dir, jsonl(say('user', LONG), say('assistant', LONG))), cwd: dir, hook_event_name: 'PreCompact' });
+
+  assert.equal(readFileSync(shared, 'utf8'), before,
+    'auto-park must not touch the snapshot file — a concurrent `>` there erases us mid-write');
+  const own = join(dir, '.claude', 'precompact-reasoning.md');
+  assert.ok(existsSync(own), 'auto-park owns .claude/precompact-reasoning.md');
+  assert.match(readFileSync(own, 'utf8'), /auto-captured/);
+});
+
+// DEFECT 2 — `claude` is not on a hook's PATH. Reproduced exactly against the
+// shipped script:
+//
+//   env -i PATH=/usr/bin:/bin node auto-park.mjs < hook.json
+//   -> "UNAVAILABLE — the summarizing model call failed (spawnSync claude ENOENT)"
+//
+// which is the note whose tail survived in the real file. On this machine
+// `claude` lives in ~/.npm-global/bin; a hook does not inherit a login shell's
+// PATH, so the model call had never once succeeded outside a test.
+//
+// Every existing test in this file scaffolds a fake `claude` and puts its dir
+// on PATH — which is exactly how a suite stays green over a feature that
+// cannot work. This one withholds PATH on purpose.
+test('finds claude when PATH does not include it', () => {
+  const dir = scaffold();
+  run(dir, { transcript_path: transcriptIn(dir, jsonl(say('user', LONG), say('assistant', LONG))), cwd: dir, hook_event_name: 'PreCompact' },
+    { PATH: '/usr/bin:/bin', MOTHY_AUTOPARK_CLAUDE_BIN: join(dir, 'bin', 'claude') });
+
+  const out = readFileSync(join(dir, '.claude', 'precompact-reasoning.md'), 'utf8');
+  assert.ok(!/ENOENT/.test(out), `still could not launch claude:\n${out}`);
+  assert.match(out, /Decided/);
 });

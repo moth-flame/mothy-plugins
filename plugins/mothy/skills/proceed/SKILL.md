@@ -172,7 +172,8 @@ compacted deliberately before reaching the threshold.
 The point of auto-compaction is that nobody watches for the right moment. So
 the capture does not depend on anyone saying the words. Three hooks ship here:
 
-- **PreCompact / snapshot** — writes `.claude/precompact-state.md`: branch,
+- **PreCompact / snapshot** — writes `.claude/precompact-state.md` (and, separately,
+  `.claude/precompact-reasoning.md`): branch,
   last commit, unpushed commits, uncommitted tracked changes. Deterministic.
 - **PreCompact / auto-park** — reads the conversation transcript and spends one
   cheap model call to append **what was decided and why, what was rejected,
