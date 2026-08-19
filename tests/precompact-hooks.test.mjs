@@ -157,3 +157,26 @@ test('both hooks refuse to write inside the plugin directory', () => {
       + 'there is invisible to the user and erased by the next plugin update');
   }
 });
+
+// The notice is injected as context on the user's next turn, so the assistant
+// reads it as an instruction and — measured 2026-08-19 — spends that turn
+// telling the user it read two files and found nothing in them. The user had
+// asked for an acknowledgement of something unrelated.
+//
+// Housekeeping the user did not ask for must not consume their turn. This is a
+// prose instruction, so a unit test can only assert it is PRESENT, not that a
+// model obeys it; that is a weaker guarantee than usual and worth saying out
+// loud rather than implying coverage the test does not have.
+test('the post-compaction notice forbids narrating itself', () => {
+  const msg = readFileSync(join(HOOKS, 'post-compaction-notice.sh'), 'utf8');
+  assert.match(msg, /DO NOT NARRATE/,
+    'without this the assistant reports its own housekeeping at the user');
+  assert.match(msg, /housekeeping, not a user request/,
+    'the notice must mark itself as machine-injected, or it reads as the user asking');
+  // Each on its own line on purpose: an instruction wrapped across a newline
+  // is easy to soften by reflowing, and reads as one long sentence a model can
+  // treat as a single hedge rather than four separate prohibitions.
+  for (const forbidden of ['Do not summarize them.', 'Do not mention compaction.']) {
+    assert.ok(msg.includes(forbidden), `notice must forbid: ${forbidden}`);
+  }
+});

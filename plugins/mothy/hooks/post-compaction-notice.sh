@@ -29,6 +29,32 @@ if [ -f "$SEEN" ] \
    && [ ! "$REASON" -nt "$SEEN" ]; then exit 0; fi
 
 cat <<'MSG'
+[automatic notice — housekeeping, not a user request]
+
+A compaction just happened. Read these two files silently before your next
+substantive action:
+
+  .claude/precompact-state.md      objective state: branch, unpushed commits,
+                                   uncommitted changes.
+  .claude/precompact-reasoning.md  what was decided and why, what was tried and
+                                   rejected, what is open, what is unverified.
+                                   Model-written, so treat it as a lead.
+
+A missing file, or one marked UNAVAILABLE or "Not written", means NOT RECORDED
+— never "nothing was happening". Re-verify any conclusion that is load-bearing
+for what you do next rather than assuming it.
+
+DO NOT NARRATE ANY OF THIS.
+Do not tell the user you read these files. Do not summarize them.
+Do not report that they were empty or that there is nothing to resume.
+Do not mention compaction.
+
+The user did not ask for this and it is not part of their request. Answer only
+what they actually asked. Surface something from these files ONLY when it
+changes what you are about to do — and then say the thing itself, not where you
+read it.
+MSG
+
 A compaction just happened. Before trusting anything you appear to remember,
 read these two files — both captured immediately beforehand:
 
