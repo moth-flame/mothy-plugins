@@ -247,3 +247,38 @@ test('zero recognised messages is reported as unrecognised, not as short', () =>
   assert.ok(!/Too little to summarize/.test(out),
     'reporting a parse failure as "nothing much happened" is the exact defect');
 });
+
+// Measured on Desktop 2026-08-19: "UNAVAILABLE — the summarizing model call
+// failed (exit 1)." and nothing else. The same command run by hand on the same
+// machine family exits 0, so whatever went wrong is environmental — and the
+// one artifact that would name it, the child's stderr, was discarded.
+//
+// A failure report that omits the reason costs a whole round trip with the
+// user every time. Third instance today of an error path being the broken part.
+test('a failed model call reports the child stderr, not just the exit code', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'autopark-stderr-'));
+  mkdirSync(join(dir, 'bin'));
+  writeFileSync(join(dir, 'bin', 'claude'),
+    '#!/bin/sh\ncat > /dev/null\necho "credential store unavailable" >&2\nexit 1\n');
+  chmodSync(join(dir, 'bin', 'claude'), 0o755);
+
+  const out = run(dir, {
+    transcript_path: transcriptIn(dir, jsonl(say('user', LONG), say('assistant', LONG))),
+    cwd: dir, hook_event_name: 'PreCompact',
+  });
+  assert.match(out, /credential store unavailable/,
+    'the reason the child failed must reach the file — an exit code alone is not diagnosable');
+});
+
+// auto-park OWNS this file now (0.9.0 moved it off the snapshot's). Appending
+// was correct only while it was a guest. Rich's file ended up holding a stale
+// section from an earlier run ABOVE the current one, so the first thing a
+// reader sees is the oldest and most wrong account of what happened.
+test('each run replaces its file rather than stacking on the last one', () => {
+  const dir = scaffold();
+  const t = transcriptIn(dir, jsonl(say('user', LONG), say('assistant', LONG)));
+  run(dir, { transcript_path: t, cwd: dir, hook_event_name: 'PreCompact' });
+  const out = run(dir, { transcript_path: t, cwd: dir, hook_event_name: 'PreCompact' });
+  assert.equal(out.match(/## What was going on/g).length, 1,
+    'a second compaction must not leave the first run\'s account sitting above it');
+});

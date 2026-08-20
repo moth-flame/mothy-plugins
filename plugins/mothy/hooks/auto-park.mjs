@@ -37,7 +37,7 @@
 // cannot read files, run commands, or touch the repo. It writes prose or
 // nothing.
 
-import { readFileSync, appendFileSync, mkdirSync, statSync, openSync, readSync, closeSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, statSync, openSync, readSync, closeSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -232,7 +232,14 @@ function askModel(convo) {
     },
   );
   if (res.error) throw res.error;
-  if (res.status !== 0) throw new Error(`exit ${res.status}`);
+  if (res.status !== 0) {
+    // The exit code alone is not diagnosable. Measured on Desktop: "exit 1"
+    // with no other information, while the identical command run by hand
+    // exited 0 — so the cause was environmental and the only artifact naming
+    // it was the stderr this line used to discard. Bounded, single-line.
+    const why = String(res.stderr || '').trim().replace(/\s+/g, ' ').slice(0, 300);
+    throw new Error(why ? `exit ${res.status}: ${why}` : `exit ${res.status}, no stderr`);
+  }
   const t = String(res.stdout || '').trim();
   if (!t || /^NOTHING SUBSTANTIVE TO RECORD/i.test(t)) return '';
   return t;
@@ -242,14 +249,24 @@ function readStdin() {
   try { return readFileSync(0, 'utf8'); } catch { return ''; }
 }
 function short(e) {
-  return String((e && e.message) || e).slice(0, 120).replace(/\n/g, ' ');
+  // 400, not 120: the message now carries the child's stderr, and clipping it
+  // to 120 would re-create the undiagnosable failure this exists to fix.
+  return String((e && e.message) || e).slice(0, 400).replace(/\n/g, ' ');
 }
+/**
+ * Replace, never append.
+ *
+ * Appending was right while this shared the snapshot's file and had to land
+ * after it. Since 0.9.0 it owns its own file, and appending means a reader's
+ * eye lands on the OLDEST section first — measured on 2026-08-19, a stale
+ * "too little conversation" sitting above the run that actually mattered.
+ */
 function write(out, body) {
   // A project with no .claude/ yet would otherwise lose the note silently —
   // which is the exact failure this file exists to prevent, wearing a
   // filesystem costume.
   try { mkdirSync(dirname(out), { recursive: true }); } catch { /* fail open */ }
-  try { appendFileSync(out, body); } catch { /* fail open */ }
+  try { writeFileSync(out, body); } catch { /* fail open */ }
 }
 function note(out, why) {
   write(out, `\n## What was going on (auto-captured)\n\n**${why}**\n\n`
