@@ -180,3 +180,69 @@ test('the post-compaction notice forbids narrating itself', () => {
     assert.ok(msg.includes(forbidden), `notice must forbid: ${forbidden}`);
   }
 });
+
+// Measured 2026-08-19: Rich opened a NEW session in a folder where an earlier
+// session had compacted, and the very first turn announced "we just came out
+// of a compaction" and reported on files that session had never written.
+//
+// The freshness test was mtime-vs-marker, which cannot tell "this session just
+// compacted" from "some session once did". A compaction always happens WITHIN
+// a session, so the session id is the discriminator.
+function fire(dir, sessionId) {
+  return execFileSync('bash', [join(HOOKS, 'post-compaction-notice.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ session_id: sessionId, cwd: dir }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' },
+  });
+}
+function park(dir, sessionId) {
+  execFileSync('bash', [join(HOOKS, 'precompact-snapshot.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ session_id: sessionId, cwd: dir, hook_event_name: 'PreCompact' }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: '', CLAUDE_PLUGIN_ROOT: '' },
+  });
+}
+
+test('the notice belongs to the compacting session — fires for the session that actually compacted', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'notice-same-'));
+  park(dir, 'session-A');
+  assert.match(fire(dir, 'session-A'), /compaction just happened/);
+});
+
+test('the notice belongs to the compacting session — stays silent in a later session that inherited the files', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'notice-other-'));
+  park(dir, 'session-A');
+  assert.equal(fire(dir, 'session-B').trim(), '',
+    'a new session must not be told it just came out of someone else\'s compaction');
+});
+
+// Not firing after a REAL compaction loses the entire feature; firing
+// spuriously is only noise. So an unidentifiable session keeps the old
+// mtime behaviour rather than failing closed — the rare case where this
+// repo's default-deny instinct points the wrong way.
+test('the notice belongs to the compacting session — falls back to the mtime rule when no session id is available', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'notice-noid-'));
+  park(dir, '');
+  assert.match(fire(dir, ''), /compaction just happened/);
+});
+
+// The asymmetric case, and the one that actually loses the feature: park files
+// written by an older plugin carry NO session stamp, while the session reading
+// them has one. A strict inequality check goes silent forever after a real
+// compaction for everyone upgrading from 0.11.0 — exactly the failure the
+// notice exists to prevent, introduced by the fix for a lesser one.
+test('the notice belongs to the compacting session — an unstamped park file still notifies', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'notice-legacy-'));
+  execFileSync('bash', [join(HOOKS, 'precompact-snapshot.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ cwd: dir, hook_event_name: 'PreCompact' }),   // pre-0.12.0: no session_id
+    env: { ...process.env, CLAUDE_PROJECT_DIR: '', CLAUDE_PLUGIN_ROOT: '' },
+  });
+  const out = execFileSync('bash', [join(HOOKS, 'post-compaction-notice.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ session_id: 'session-with-an-id', cwd: dir }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' },
+  });
+  assert.match(out, /compaction just happened/,
+    'unknown on either side must fall back to the mtime rule, never to silence');
+});

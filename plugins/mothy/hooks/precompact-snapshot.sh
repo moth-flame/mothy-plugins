@@ -34,6 +34,12 @@ if [ ! -t 0 ]; then IFS= read -r -d '' -t 2 PAYLOAD || true; fi
 HOOK_CWD="$(printf '%s' "$PAYLOAD" \
   | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
 
+# Stamp WHICH session compacted. The post-compaction notice needs it: park
+# files outlive the session that wrote them, so "these files are new" cannot
+# distinguish "this session just compacted" from "some session once did".
+SESSION_ID="$(printf '%s' "$PAYLOAD" \
+  | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+
 ROOT="${CLAUDE_PROJECT_DIR:-}"
 [ -n "$ROOT" ] || ROOT="$HOOK_CWD"
 [ -n "$ROOT" ] || ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -49,7 +55,9 @@ case "${CLAUDE_PLUGIN_ROOT:-}" in
 esac
 
 OUT="$ROOT/.claude/precompact-state.md"
+SESSION_FILE="$ROOT/.claude/.precompact-session"
 mkdir -p "$ROOT/.claude" 2>/dev/null || exit 0
+printf '%s' "$SESSION_ID" > "$SESSION_FILE" 2>/dev/null || true
 
 {
   echo "# Pre-compaction snapshot"

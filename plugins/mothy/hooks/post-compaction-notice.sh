@@ -23,6 +23,25 @@ SEEN="$ROOT/.claude/.precompact-state.seen"
 # auto-park appends, and nothing guarantees they do not overlap.
 REASON="$ROOT/.claude/precompact-reasoning.md"
 
+# WHOSE compaction was it? Park files outlive their session, so a later
+# session opened in the same folder would otherwise be told it just came out of
+# a compaction it had no part in — measured 2026-08-19, and it then reported a
+# stranger's state at the user on their first turn.
+PAYLOAD=""
+if [ ! -t 0 ]; then IFS= read -r -d '' -t 2 PAYLOAD || true; fi
+NOW_SESSION="$(printf '%s' "$PAYLOAD" \
+  | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+PARK_SESSION="$(cat "$ROOT/.claude/.precompact-session" 2>/dev/null || true)"
+
+# Both known and different: not ours, say nothing.
+#
+# When either is UNKNOWN, fall through to the mtime rule rather than going
+# quiet. This is the rare case where this repo's fail-closed instinct points
+# the wrong way: a missed notice after a REAL compaction loses the whole
+# feature, while a spurious one is noise. Wrong in the recoverable direction.
+if [ -n "$NOW_SESSION" ] && [ -n "$PARK_SESSION" ] \
+   && [ "$NOW_SESSION" != "$PARK_SESSION" ]; then exit 0; fi
+
 [ -f "$SNAP" ] || [ -f "$REASON" ] || exit 0
 if [ -f "$SEEN" ] \
    && [ ! "$SNAP" -nt "$SEEN" ] \
