@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#
+# pre-push — this repo's portable gate.
+#
+# `node --test tests/` is exactly what CI (`validate.yml`) runs, so a red push
+# here is a red CI run you have not waited for yet. There is no root
+# package.json on purpose — the node test runner is the whole harness.
+#
+# Do NOT use --no-verify. If this is failing, the tests are telling you
+# something; fix the code, or change the test as its own clearly-explained step.
+#
+# TRACKED ON PURPOSE. A hook under .git/hooks is never cloned. This one rides
+# the checkout, and `core.hooksPath` is what points git at it — set by the
+# plugin's own SessionStart hook (plugins/mothy/hooks/arm-push-gate.mjs), or by
+# hand:  git config core.hooksPath .githooks
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-push: node not found — cannot run the test gate. Install node or fix PATH." >&2
+  exit 1
+fi
+
+echo "pre-push: node --test tests/"
+node --test tests/

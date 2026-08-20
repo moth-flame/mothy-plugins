@@ -91,10 +91,79 @@ Mothy is two cooperating surfaces — never confuse them
   artifacts.
 - `plugins/mothy/docs/` — `ARCHITECTURE.md`, `INTERFACE.md`, `CREDENTIALS.md`,
   `ONBOARDING.md`, `VIDEO-ARTICLE-RUNBOOK.md`.
+- `plugins/mothy/hooks/` — the shipped hooks: the PreCompact pair
+  (`precompact-snapshot.sh` + `auto-park.mjs`), the `UserPromptSubmit` notice
+  (`post-compaction-notice.sh`), and the SessionStart pre-push arming hook
+  (`arm-push-gate.mjs` — see below). **Wiring is deliberately duplicated in
+  `hooks/hooks.json` AND `.claude-plugin/plugin.json`** because we do not know
+  which one a given Claude Code version reads; `tests/arm-push-gate.test.mjs`
+  asserts the two are deep-equal, so they cannot drift.
 - `tests/*.mjs` — `node --test` guards (manifest shape, artifact contract,
-  creds resolver, vendored-tooling presence).
+  creds resolver, vendored-tooling presence, the compaction hooks, the pre-push
+  arming hook).
+- `.githooks/pre-push` — this repo's OWN gate (runs `node --test tests/`).
+  Tracked, so it rides a clone; armed per clone by `arm-push-gate.mjs` or by
+  hand with `git config core.hooksPath .githooks`.
 - `.github/workflows/` — `validate.yml` (manifest tests + optional `claude
   plugin validate --strict`) and `secret-scan.yml` (gitleaks).
+
+## `arm-push-gate.mjs` — arming the gate the repo already declares
+
+**The gap it closes.** Git hooks are PER-CLONE and neither delivery mechanism
+survives a clone alone: `.git/hooks/*` is never cloned, and `core.hooksPath`
+pointing at a tracked `.githooks/` makes the hook FILES ride the checkout while
+the POINTER stays in local git config — also not cloned, set once by whichever
+machine ran the repo's `install-hooks.sh`. So a fresh clone (and every cloud
+session) pushes with **no pre-push gate at all, silently**. A money-moving repo
+was pushed that way; it was caught only because the session happened to look.
+
+**Decision order** (pure `decideArming()` over injected observations):
+
+| # | Condition | Action |
+|---|---|---|
+| 1 | `MOTHY_ARM_PUSH_GATE` is `0`/`off`/`false`/`no` | nothing, silent |
+| 2 | not inside a git work tree | nothing, silent |
+| 3 | an effective `pre-push` exists **and is executable** | nothing, silent |
+| 4 | `core.hooksPath` set to something that is NOT a tracked hooks dir | **do not override** — operator's choice — silent |
+| 5 | tracked `.githooks/`/`githooks/` holds a `pre-push` | `git config core.hooksPath <dir>` + `chmod +x`, then **RE-PROBE** |
+| 6 | a known installer exists (`scripts/install-hooks.sh`, `scripts/install-git-hooks.sh`, `bin/install-hooks.sh`, `install-hooks.sh`) | run it, then **RE-PROBE** |
+| 7 | none of the above, but `CLAUDE.md`/`AGENTS.md` mentions a pre-push gate | **WARN**, naming every path searched |
+| 8 | none of the above, repo declares nothing | silent |
+
+**The three rules, and why each is there:**
+
+- **NEVER synthesize a hook, never guess a test command.** A wrong command
+  blocks every push in that repo with a confusing error — worse than the gap.
+  The module carries **no file-writing primitive at all** (a source-level test
+  enumerates `writeFileSync`/`mkdirSync`/… and forbids them); `chmodSync` only
+  changes the mode of a file the repo already authored.
+- **The exit code is never the verdict — RE-PROBE.** An installer that exits 0
+  and installs nothing must warn, not report success. Same doctrine as the
+  dist-patch marker re-grep in the Mothy repo.
+- **Step 7 is the load-bearing half.** The bug being fixed is not "no gate", it
+  is "no gate, and nobody could tell". A hook that silently gives up there
+  rebuilds it exactly. Equally: steps 1-4 and 8 say **nothing** — unsolicited
+  noise in every unrelated repo is how a real warning gets ignored.
+
+**THE PROBE TRAP — `.git/hooks/pre-push` IS A FALSE NEGATIVE.** In a
+`core.hooksPath` repo that file does not exist and the gate is fully armed;
+measured in the Mothy repo on 2026-08-20, where the probe said "absent" about a
+working gate. The only correct probe resolves the config:
+
+```
+git rev-parse --git-path hooks/pre-push     # → .githooks/pre-push, or ../../.githooks/pre-push from a subdir
+```
+
+It returns a path relative to the CWD it ran in, so resolve it against that CWD.
+A source-level test forbids the literal `.git/hooks/pre-push` in this module.
+
+**Kill switch:** `MOTHY_ARM_PUSH_GATE=0` (default ON — a gate nobody arms is the
+status quo this fixes). Fail-open everywhere: exits 0 on every path, and the
+wiring wraps it in `2>/dev/null || true`.
+
+**What it cannot do:** it cannot tell whether the repo's gate is any *good*, it
+cannot arm anything for a repo that never authored a hook, and its step-7
+warning depends on the repo documenting its own rule in `CLAUDE.md`/`AGENTS.md`.
 
 ## Run / test / publish
 

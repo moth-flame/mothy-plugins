@@ -44,6 +44,30 @@ connector list ready to **Connect**; bundling one in the plugin would only
 create a dead, duplicate placeholder. The org connector is provisioned
 separately from the plugin.
 
+## Hooks the plugin brings with it
+
+Installing `mothy` also installs a few small hooks. You do not invoke them.
+
+| Hook | When | What it does |
+|---|---|---|
+| `precompact-snapshot.sh` + `auto-park.mjs` | before a compaction | writes the objective state and the reasoning to `.claude/` so a compaction does not lose them |
+| `post-compaction-notice.sh` | first prompt after one | hands that back, once |
+| `arm-push-gate.mjs` | session start | **turns on the pre-push gate the repo already ships** |
+
+**Why the last one exists.** Git hooks are per-clone. `.git/hooks/*` is never
+cloned, and a repo that keeps its hooks in a tracked `.githooks/` still needs
+`core.hooksPath` set — which is *local git config*, also not cloned. So a fresh
+clone, and every cloud session, pushes with **no gate at all and no sign that
+anything is missing**. This hook runs that one idempotent command for you.
+
+It **never writes a hook and never guesses a test command** — it only switches
+on what the repo itself authored (`.githooks/pre-push`, or the repo's own
+`scripts/install-hooks.sh`). If the repo's `CLAUDE.md`/`AGENTS.md` says it wants
+a pre-push gate and none can be found, it **says so** rather than going quiet.
+In a repo that declares nothing, it is silent.
+
+Turn it off with `MOTHY_ARM_PUSH_GATE=0` (default on).
+
 ## Access
 
 Private, **org-only** marketplace for Moth+Flame. Mothy's data + actions are
