@@ -59,7 +59,25 @@ SESSION_FILE="$ROOT/.claude/.precompact-session"
 mkdir -p "$ROOT/.claude" 2>/dev/null || exit 0
 printf '%s' "$SESSION_ID" > "$SESSION_FILE" 2>/dev/null || true
 
+# DID WE ACTUALLY CAPTURE ANYTHING? The post-compaction notice needs to know,
+# because injecting "read these two files" when both are empty hands the
+# assistant a to-do list it will dutifully narrate at a user who asked for
+# something else. Measured twice on 2026-08-19, through two rounds of
+# strengthening the wording — an instruction that arrives gets followed, so
+# the fix is to not send one.
+#
+# Signal = a git repo AND something in it that a summary could lose. A clean
+# tree at a pushed HEAD carries nothing forward: git already remembers it.
+SIGNAL="none"
+if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  if [ -n "$(git -C "$ROOT" status --short --untracked-files=no 2>/dev/null)" ] \
+     || [ -n "$(git -C "$ROOT" log --oneline @{u}..HEAD 2>/dev/null)" ]; then
+    SIGNAL="present"
+  fi
+fi
+
 {
+  echo "<!-- park-signal: $SIGNAL -->"
   echo "# Pre-compaction snapshot"
   echo
   echo "Written automatically by the mothy plugin's PreCompact hook."

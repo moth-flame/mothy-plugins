@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, existsSync, mkdtempSync, chmodSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, mkdirSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,7 +33,26 @@ function run(script, projectDir) {
     encoding: 'utf8',
   });
 }
-const fresh = () => mkdtempSync(join(tmpdir(), 'mothy-precompact-'));
+// A project with something genuinely worth carrying forward: a repo with
+// uncommitted tracked work.
+//
+// Before park-signal (0.14.0) a bare temp dir was enough to make the notice
+// fire, so these fixtures never had to contain anything. An empty project now
+// correctly produces silence — which means without this seeding these tests
+// would pass by asserting the NEW emptiness behaviour while claiming to test
+// once-per-snapshot and session scoping. Green, and measuring nothing.
+function seedRealWork(dir) {
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  writeFileSync(join(dir, 'tracked.txt'), 'v1\n');
+  execFileSync('git', ['add', '.'], { cwd: dir });
+  execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'i'], { cwd: dir });
+  writeFileSync(join(dir, 'tracked.txt'), 'v2 uncommitted\n');
+  return dir;
+}
+
+function fresh() {
+  return seedRealWork(mkdtempSync(join(tmpdir(), 'mothy-precompact-')));
+}
 
 test('both wiring locations declare the same two events', () => {
   const hooksJson = JSON.parse(readFileSync(join(HOOKS, 'hooks.json'), 'utf8'));
@@ -49,7 +68,7 @@ test('both wiring locations declare the same two events', () => {
 });
 
 test('snapshot writes the state file and exits 0 outside a git repo', () => {
-  const dir = fresh();
+  const dir = mkdtempSync(join(tmpdir(), 'mothy-bare-'));   // deliberately NOT seeded
   run(SNAPSHOT, dir); // execFileSync throws on non-zero — a throw IS the failure
   const out = join(dir, '.claude', 'precompact-state.md');
   assert.ok(existsSync(out));
@@ -196,6 +215,7 @@ function fire(dir, sessionId) {
   });
 }
 function park(dir, sessionId) {
+  if (!existsSync(join(dir, '.git'))) seedRealWork(dir);
   execFileSync('bash', [join(HOOKS, 'precompact-snapshot.sh')], {
     cwd: dir, encoding: 'utf8',
     input: JSON.stringify({ session_id: sessionId, cwd: dir, hook_event_name: 'PreCompact' }),
@@ -232,7 +252,7 @@ test('the notice belongs to the compacting session — falls back to the mtime r
 // compaction for everyone upgrading from 0.11.0 — exactly the failure the
 // notice exists to prevent, introduced by the fix for a lesser one.
 test('the notice belongs to the compacting session — an unstamped park file still notifies', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'notice-legacy-'));
+  const dir = seedRealWork(mkdtempSync(join(tmpdir(), 'notice-legacy-')));
   execFileSync('bash', [join(HOOKS, 'precompact-snapshot.sh')], {
     cwd: dir, encoding: 'utf8',
     input: JSON.stringify({ cwd: dir, hook_event_name: 'PreCompact' }),   // pre-0.12.0: no session_id
@@ -245,4 +265,74 @@ test('the notice belongs to the compacting session — an unstamped park file st
   });
   assert.match(out, /compaction just happened/,
     'unknown on either side must fall back to the mtime rule, never to silence');
+});
+
+// Measured 2026-08-19, twice, after two rounds of strengthening the wording:
+// the assistant still opened with "I'll read those two files before doing
+// anything else" and a paragraph about what they contained — in a project that
+// is not a git repo, with no reasoning file, i.e. with NOTHING to report.
+//
+// Prose was the wrong lever. An instruction that arrives gets followed, and
+// being followed IS the visible behaviour. So the fix is upstream: when
+// neither hook captured anything, inject nothing at all. Narration then has no
+// instruction to narrate, instead of a stronger one to resist.
+test('the notice stays silent when neither hook captured anything', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'notice-nosignal-'));   // not a git repo, no reasoning
+  execFileSync('bash', [join(HOOKS, 'precompact-snapshot.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ session_id: 's1', cwd: dir, hook_event_name: 'PreCompact' }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: '', CLAUDE_PLUGIN_ROOT: '' },
+  });
+  const out = execFileSync('bash', [join(HOOKS, 'post-compaction-notice.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ session_id: 's1', cwd: dir }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' },
+  });
+  assert.equal(out.trim(), '',
+    'nothing was captured, so there is nothing to tell the assistant to read');
+});
+
+// The mirror, and the one that must not regress: real captured state MUST
+// still notify. Silence-when-empty is only correct if it is genuinely
+// conditional — a notice that never fires is not a fix, it is a deletion.
+test('the notice still fires when there is real state to carry forward', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'notice-signal-'));
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  writeFileSync(join(dir, 'tracked.txt'), 'v1\n');
+  execFileSync('git', ['add', '.'], { cwd: dir });
+  execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init'], { cwd: dir });
+  writeFileSync(join(dir, 'tracked.txt'), 'v2 uncommitted\n');   // real, unsaved work
+
+  execFileSync('bash', [join(HOOKS, 'precompact-snapshot.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ session_id: 's1', cwd: dir, hook_event_name: 'PreCompact' }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: '', CLAUDE_PLUGIN_ROOT: '' },
+  });
+  const out = execFileSync('bash', [join(HOOKS, 'post-compaction-notice.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ session_id: 's1', cwd: dir }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' },
+  });
+  assert.match(out, /compaction just happened/,
+    'uncommitted work is exactly what must survive a compaction');
+});
+
+// A park file written by a pre-0.14.0 plugin has NO park-signal marker at all.
+// Reading "no marker" as "no signal" would go permanently quiet for everyone
+// mid-upgrade — the same shape as the session-id trap, one release later, and
+// it survived the first mutation sweep because every seeded fixture gets a
+// marker from the current snapshot. Unknown falls toward notifying.
+test('an unmarked park file from an older plugin still notifies', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'notice-unmarked-'));
+  mkdirSync(join(dir, '.claude'), { recursive: true });
+  writeFileSync(join(dir, '.claude', 'precompact-state.md'),
+    '# Pre-compaction snapshot\n\n## Git position\n```\nabc123 some real commit\n```\n');
+
+  const out = execFileSync('bash', [join(HOOKS, 'post-compaction-notice.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ session_id: 's1', cwd: dir }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' },
+  });
+  assert.match(out, /compaction just happened/,
+    'an absent marker is UNKNOWN, not a declaration of emptiness');
 });

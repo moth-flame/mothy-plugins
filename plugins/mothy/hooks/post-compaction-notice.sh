@@ -43,6 +43,22 @@ if [ -n "$NOW_SESSION" ] && [ -n "$PARK_SESSION" ] \
    && [ "$NOW_SESSION" != "$PARK_SESSION" ]; then exit 0; fi
 
 [ -f "$SNAP" ] || [ -f "$REASON" ] || exit 0
+
+# Nothing captured by EITHER hook ⇒ say nothing at all. A file that exists but
+# declares itself empty is not a reason to spend the user's next turn.
+#
+# An ABSENT marker counts as present: a park file written by an older plugin
+# has no marker, and going quiet on it would silently drop the notice for
+# everyone mid-upgrade. Unknown falls toward notifying, as with the session id.
+signal_of() {
+  [ -f "$1" ] || { echo none; return; }
+  case "$(head -1 "$1" 2>/dev/null)" in
+    *"park-signal: present"*) echo present ;;
+    *"park-signal: none"*)    echo none ;;
+    *)                        echo present ;;
+  esac
+}
+if [ "$(signal_of "$SNAP")" = none ] && [ "$(signal_of "$REASON")" = none ]; then exit 0; fi
 if [ -f "$SEEN" ] \
    && [ ! "$SNAP" -nt "$SEEN" ] \
    && [ ! "$REASON" -nt "$SEEN" ]; then exit 0; fi

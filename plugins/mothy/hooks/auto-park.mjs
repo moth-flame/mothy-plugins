@@ -112,7 +112,8 @@ function main() {
       + `(earlier turns not seen). Recovered after the fact — weaker than a deliberate park._`
     : '_Model-written from the conversation. Recovered after the fact — weaker than a deliberate park._';
 
-  write(out, `\n## What was going on (auto-captured)\n\n${header}\n\n${text.trim()}\n`);
+  write(out, `<!-- park-signal: present -->\n## What was going on (auto-captured)\n\n`
+    + `${header}\n\n${text.trim()}\n`);
 }
 
 /** Read the LAST n bytes of a file without loading a 65 MB transcript. */
@@ -269,7 +270,9 @@ function write(out, body) {
   try { writeFileSync(out, body); } catch { /* fail open */ }
 }
 function note(out, why) {
-  write(out, `\n## What was going on (auto-captured)\n\n**${why}**\n\n`
+  // `none`: this file exists but carries nothing forward. The notice reads it
+  // and stays quiet rather than telling the assistant to go read an apology.
+  write(out, `<!-- park-signal: none -->\n## What was going on (auto-captured)\n\n**${why}**\n\n`
     + 'This section not being here would have read as "nothing was happening". It is here, '
     + 'saying it could not be written, so that distinction survives.\n');
 }
