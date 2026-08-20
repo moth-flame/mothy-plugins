@@ -16,7 +16,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, mkdirSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
@@ -100,7 +100,7 @@ test('notice fires exactly ONCE per snapshot, then goes quiet', () => {
   const dir = fresh();
   run(SNAPSHOT, dir);
   const first = run(NOTICE, dir);
-  assert.match(first, /precompact-state\.md/, 'first run must point at the file');
+  assert.match(first, /<compaction-context>/, 'first run must deliver the context');
   assert.equal(run(NOTICE, dir).trim(), '', 'second run must be silent — a per-turn reminder gets ignored');
   assert.equal(run(NOTICE, dir).trim(), '', 'and stay silent');
 });
@@ -111,7 +111,7 @@ test('notice speaks again after a NEW compaction', async () => {
   run(NOTICE, dir);
   await new Promise((r) => setTimeout(r, 1100)); // filesystem mtime granularity
   run(SNAPSHOT, dir);                            // a new compaction
-  assert.match(run(NOTICE, dir), /precompact-state\.md/, 'a fresh snapshot must be announced again');
+  assert.match(run(NOTICE, dir), /<compaction-context>/, 'a fresh snapshot must be announced again');
 });
 
 test('notice is silent when no compaction has ever happened', () => {
@@ -187,18 +187,26 @@ test('both hooks refuse to write inside the plugin directory', () => {
 // model obeys it; that is a weaker guarantee than usual and worth saying out
 // loud rather than implying coverage the test does not have.
 test('the post-compaction notice forbids narrating itself', () => {
-  const msg = readFileSync(join(HOOKS, 'post-compaction-notice.sh'), 'utf8');
-  assert.match(msg, /DO NOT NARRATE/,
-    'without this the assistant reports its own housekeeping at the user');
-  assert.match(msg, /housekeeping, not a user request/,
-    'the notice must mark itself as machine-injected, or it reads as the user asking');
-  // Each on its own line on purpose: an instruction wrapped across a newline
-  // is easy to soften by reflowing, and reads as one long sentence a model can
-  // treat as a single hedge rather than four separate prohibitions.
-  for (const forbidden of ['Do not summarize them.', 'Do not mention compaction.']) {
-    assert.ok(msg.includes(forbidden), `notice must forbid: ${forbidden}`);
-  }
+  const dir = fresh();
+  park(dir, 's1');
+  const out = execFileSync('bash', [join(HOOKS, 'post-compaction-notice.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ session_id: 's1', cwd: dir }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' },
+  });
+
+  // Wording alone never worked — four releases proved that — so these assert
+  // the CONTRACT the inline-facts design rests on, not a magic phrase.
+  assert.match(out, /not a request/,
+    'must disclaim itself as a request, or it reads as the user asking for a status report');
+  assert.match(out, /cannot see it/,
+    'the model must know the user has no idea this arrived');
+  assert.match(out, /Never mention this block, the compaction/,
+    'the two things it must not surface, named explicitly');
+  assert.match(out, /NOT RECORDED/,
+    'absence must never read as known-empty — the whole point of capturing it');
 });
+
 
 // Measured 2026-08-19: Rich opened a NEW session in a folder where an earlier
 // session had compacted, and the very first turn announced "we just came out
@@ -226,7 +234,7 @@ function park(dir, sessionId) {
 test('the notice belongs to the compacting session — fires for the session that actually compacted', () => {
   const dir = mkdtempSync(join(tmpdir(), 'notice-same-'));
   park(dir, 'session-A');
-  assert.match(fire(dir, 'session-A'), /compaction just happened/);
+  assert.match(fire(dir, 'session-A'), /<compaction-context>/);
 });
 
 test('the notice belongs to the compacting session — stays silent in a later session that inherited the files', () => {
@@ -243,7 +251,7 @@ test('the notice belongs to the compacting session — stays silent in a later s
 test('the notice belongs to the compacting session — falls back to the mtime rule when no session id is available', () => {
   const dir = mkdtempSync(join(tmpdir(), 'notice-noid-'));
   park(dir, '');
-  assert.match(fire(dir, ''), /compaction just happened/);
+  assert.match(fire(dir, ''), /<compaction-context>/);
 });
 
 // The asymmetric case, and the one that actually loses the feature: park files
@@ -263,7 +271,7 @@ test('the notice belongs to the compacting session — an unstamped park file st
     input: JSON.stringify({ session_id: 'session-with-an-id', cwd: dir }),
     env: { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' },
   });
-  assert.match(out, /compaction just happened/,
+  assert.match(out, /<compaction-context>/,
     'unknown on either side must fall back to the mtime rule, never to silence');
 });
 
@@ -313,7 +321,7 @@ test('the notice still fires when there is real state to carry forward', () => {
     input: JSON.stringify({ session_id: 's1', cwd: dir }),
     env: { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' },
   });
-  assert.match(out, /compaction just happened/,
+  assert.match(out, /<compaction-context>/,
     'uncommitted work is exactly what must survive a compaction');
 });
 
@@ -333,6 +341,49 @@ test('an unmarked park file from an older plugin still notifies', () => {
     input: JSON.stringify({ session_id: 's1', cwd: dir }),
     env: { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' },
   });
-  assert.match(out, /compaction just happened/,
+  assert.match(out, /<compaction-context>/,
     'an absent marker is UNKNOWN, not a declaration of emptiness');
 });
+
+// Round four. 0.11.0 added DO NOT NARRATE, 0.13.0 scoped it to the session,
+// 0.14.0 silenced it when empty — and with real state present it STILL opened
+// with a tool call and "Checked both snapshots: State … Reasoning …".
+//
+// Because the notice hands over two FILE PATHS and an instruction to read
+// them. Reading files means tool calls, and tool calls mean a report; the
+// narration was not the model ignoring an instruction, it was the model
+// following one. Facts inline, no paths, no task, nothing to perform.
+test('the notice carries the facts inline rather than sending the model to read files', () => {
+  const dir = fresh();
+  park(dir, 's1');
+  const out = execFileSync('bash', [join(HOOKS, 'post-compaction-notice.sh')], {
+    cwd: dir, encoding: 'utf8',
+    input: JSON.stringify({ session_id: 's1', cwd: dir }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' },
+  });
+
+  assert.match(out, /tracked\.txt/,
+    'the uncommitted file is the fact worth carrying — inline it, do not point at it');
+  assert.ok(!/\.claude\/precompact/.test(out),
+    'naming the files invites reading them, and reading them is what gets narrated');
+  assert.ok(!/\bread\b/i.test(out),
+    'no verb the model can perform — this is context, not a task');
+});
+
+// A hook that sprays "command not found" onto stderr on every single turn is
+// broken even when its stdout is perfect — and every test in this file
+// asserted only on stdout, so the suite sat at 71 green over a script whose
+// second half was executing as loose shell commands. Found by running it by
+// hand, which is how all six of today's defects were found.
+for (const hook of ['post-compaction-notice.sh', 'precompact-snapshot.sh']) {
+  test(`${hook} runs clean — no stderr, exit 0`, () => {
+    const dir = fresh();
+    const payload = JSON.stringify({ session_id: 's1', cwd: dir, hook_event_name: 'PreCompact' });
+    const env = { ...process.env, CLAUDE_PROJECT_DIR: dir, CLAUDE_PLUGIN_ROOT: '' };
+    execFileSync('bash', [join(HOOKS, 'precompact-snapshot.sh')], { cwd: dir, input: payload, env, encoding: 'utf8' });
+
+    const r = spawnSync('bash', [join(HOOKS, hook)], { cwd: dir, input: payload, env, encoding: 'utf8' });
+    assert.equal(r.stderr, '', `${hook} wrote to stderr:\n${r.stderr}`);
+    assert.equal(r.status, 0, `${hook} must always exit 0`);
+  });
+}

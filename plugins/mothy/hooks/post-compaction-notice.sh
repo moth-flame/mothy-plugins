@@ -63,48 +63,43 @@ if [ -f "$SEEN" ] \
    && [ ! "$SNAP" -nt "$SEEN" ] \
    && [ ! "$REASON" -nt "$SEEN" ]; then exit 0; fi
 
-cat <<'MSG'
-[automatic notice — housekeeping, not a user request]
+# THE FACTS, INLINE. Not paths, not a task.
+#
+# Four releases were spent trying to stop the assistant narrating this. Every
+# one treated it as a wording problem. It was not: the notice handed over two
+# file paths and told the model to read them, so it made tool calls and
+# reported what it found. That IS reading files. The narration was compliance,
+# not defiance.
+#
+# So nothing here names a file, and nothing asks for an action. Bounded: a
+# compaction is not the moment to paste a thousand-line diff into context.
+BRANCH="$(git -C "$ROOT" branch --show-current 2>/dev/null)"
+DIRTY="$(git -C "$ROOT" status --short --untracked-files=no 2>/dev/null | head -20)"
+AHEAD="$(git -C "$ROOT" log --oneline @{u}..HEAD 2>/dev/null | head -10)"
+WHY=""
+if [ -f "$REASON" ] && [ "$(signal_of "$REASON")" = present ]; then
+  WHY="$(sed -e '/^<!--/d' -e '/^## What was going on/d' "$REASON" 2>/dev/null | head -60)"
+fi
 
-A compaction just happened. Read these two files silently before your next
-substantive action:
-
-  .claude/precompact-state.md      objective state: branch, unpushed commits,
-                                   uncommitted changes.
-  .claude/precompact-reasoning.md  what was decided and why, what was tried and
-                                   rejected, what is open, what is unverified.
-                                   Model-written, so treat it as a lead.
-
-A missing file, or one marked UNAVAILABLE or "Not written", means NOT RECORDED
-— never "nothing was happening". Re-verify any conclusion that is load-bearing
-for what you do next rather than assuming it.
-
-DO NOT NARRATE ANY OF THIS.
-Do not tell the user you read these files. Do not summarize them.
-Do not report that they were empty or that there is nothing to resume.
-Do not mention compaction.
-
-The user did not ask for this and it is not part of their request. Answer only
-what they actually asked. Surface something from these files ONLY when it
-changes what you are about to do — and then say the thing itself, not where you
-read it.
-MSG
-
-A compaction just happened. Before trusting anything you appear to remember,
-read these two files — both captured immediately beforehand:
-
-  .claude/precompact-state.md      objective state: branch, unpushed commits,
-                                   uncommitted changes. Mechanical, always
-                                   accurate, no reasoning.
-  .claude/precompact-reasoning.md  what was decided and why, what was tried and
-                                   rejected, what is open, what is unverified.
-                                   Written by a model, so weaker than a
-                                   deliberate park — treat it as a lead.
-
-A missing file, or a section marked UNAVAILABLE, means "not recorded" — never
-"nothing was happening". Re-verify any conclusion that is load-bearing for what
-you do next rather than assuming it.
-MSG
+{
+  echo "<compaction-context>"
+  echo "The conversation was just compacted. The summary kept conclusions and"
+  echo "dropped the evidence under them. What follows was captured immediately"
+  echo "beforehand and is the part a summary loses."
+  echo
+  [ -n "$BRANCH" ] && echo "branch: $BRANCH"
+  if [ -n "$AHEAD" ]; then echo "unpushed:"; printf '%s\n' "$AHEAD"; fi
+  if [ -n "$DIRTY" ]; then echo "uncommitted:"; printf '%s\n' "$DIRTY"; fi
+  if [ -n "$WHY" ]; then echo; printf '%s\n' "$WHY"; fi
+  echo
+  echo "This is background context, not a request, and not something the user"
+  echo "said. They cannot see it. Answer only what they actually asked."
+  echo "Never mention this block, the compaction, or how you came to know any"
+  echo "of it. Use a fact from here only where it changes what you do, and then"
+  echo "state the fact alone. Anything absent above is NOT RECORDED rather than"
+  echo "known-empty, so re-verify rather than assuming."
+  echo "</compaction-context>"
+}
 
 : > "$SEEN" 2>/dev/null || true
 exit 0
