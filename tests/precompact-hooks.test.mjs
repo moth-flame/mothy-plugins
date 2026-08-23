@@ -387,3 +387,65 @@ for (const hook of ['post-compaction-notice.sh', 'precompact-snapshot.sh']) {
     assert.equal(r.status, 0, `${hook} must always exit 0`);
   });
 }
+
+// ── The notice must reach a resume that no user prompt follows ──────────────
+//
+// MEASURED 2026-08-23. `post-compaction-notice.sh` shipped registered on
+// UserPromptSubmit ALONE, on this stated premise in its own header:
+//
+//   "Compaction does not start a new session, so there is no session-start
+//    moment afterwards to hook; the first thing that happens post-compaction
+//    is the user's next prompt."
+//
+// That was true when written. It is false in Claude Code 2.1.238, which fires
+// SessionStart with source=compact on a compaction resume — 92 such events in
+// a single Mothy session log on the day this was found.
+//
+// The cost of the stale premise is not theoretical. An auto-compaction resumes
+// the assistant MID-TURN, and it then keeps working with no notice at all
+// until the user happens to type. On 2026-08-23 that ran for two full turns:
+// asked whether its park hooks had fired, the assistant answered "no" from
+// memory while a snapshot sat on disk saying otherwise — because the only
+// thing that would have told it was waiting on a prompt that had not arrived.
+//
+// Registering on SessionStart as WELL costs nothing, because the script's
+// gates are what decide whether it speaks, not the event that ran it: a fresh
+// session's id will not match `.precompact-session`, and a second firing
+// within one resume is stopped by the `.seen` marker. The duplication is safe
+// for exactly the reason the file header already gives for the plugin.json /
+// hooks.json duplication — the script is idempotent.
+test('the post-compaction notice is registered on SessionStart, not only UserPromptSubmit', () => {
+  const declarations = [
+    ['hooks/hooks.json', join(HOOKS, 'hooks.json')],
+    ['.claude-plugin/plugin.json', join(ROOT, 'plugins', 'mothy', '.claude-plugin', 'plugin.json')],
+  ];
+
+  for (const [label, file] of declarations) {
+    const doc = JSON.parse(readFileSync(file, 'utf8'));
+    const hooks = typeof doc.hooks === 'object' && !Array.isArray(doc.hooks) && doc.hooks.PreCompact
+      ? doc.hooks
+      : doc;
+
+    const commandsFor = (event) =>
+      (hooks[event] ?? []).flatMap((entry) => (entry.hooks ?? []).map((h) => h.command));
+
+    const onSessionStart = commandsFor('SessionStart');
+    assert.ok(
+      onSessionStart.some((c) => c.includes('post-compaction-notice.sh')),
+      `${label}: post-compaction-notice.sh is not on SessionStart. A compaction `
+      + 'resumes the assistant mid-turn and fires SessionStart(source=compact); '
+      + 'registering only on UserPromptSubmit means the notice waits for a prompt '
+      + 'that may never come, and the assistant works from a summary that dropped '
+      + 'the evidence.',
+    );
+
+    // The mirror failure: dropping UserPromptSubmit "because SessionStart covers
+    // it". It does not — a compaction that fires no SessionStart in some other
+    // client still needs the prompt path. Both, or neither is reliable.
+    assert.ok(
+      commandsFor('UserPromptSubmit').some((c) => c.includes('post-compaction-notice.sh')),
+      `${label}: post-compaction-notice.sh must STAY on UserPromptSubmit as well — `
+      + 'SessionStart is an addition, not a replacement.',
+    );
+  }
+});

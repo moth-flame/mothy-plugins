@@ -1,6 +1,6 @@
 {
   "name": "mothy",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Moth+Flame team agent \u2014 briefs, decks, intel search, Google Workspace in-place edits, onboarding. Sign in with your @mothandflamevr.com Google account.",
   "author": {
     "name": "Moth+Flame",
@@ -55,6 +55,11 @@
       {
         "matcher": "*",
         "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/post-compaction-notice.sh\" 2>/dev/null || true",
+            "timeout": 5
+          },
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/arm-push-gate.mjs\" 2>/dev/null || true",

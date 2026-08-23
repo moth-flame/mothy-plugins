@@ -36,6 +36,11 @@
       "hooks": [
         {
           "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/post-compaction-notice.sh\" 2>/dev/null || true",
+          "timeout": 5
+        },
+        {
+          "type": "command",
           "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/arm-push-gate.mjs\" 2>/dev/null || true",
           "timeout": 25,
           "statusMessage": "Checking this repo's pre-push gate..."

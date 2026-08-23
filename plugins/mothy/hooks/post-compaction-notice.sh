@@ -1,10 +1,26 @@
 #!/usr/bin/env bash
 # post-compaction-notice.sh — the other half of the loop.
 #
-# A snapshot nothing reads is worthless. Compaction does not start a new
-# session, so there is no session-start moment afterwards to hook; the first
-# thing that happens post-compaction is the user's next prompt. This fires
-# there, ONCE, and tells the assistant the file exists.
+# A snapshot nothing reads is worthless. This fires ONCE after a compaction and
+# hands over the facts a summary drops.
+#
+# IT IS REGISTERED ON TWO EVENTS, AND THAT IS NOT BELT-AND-BRACES.
+# This header used to say compaction "does not start a new session, so there is
+# no session-start moment afterwards to hook", and registered on
+# UserPromptSubmit alone. That was true when written and is false in Claude Code
+# 2.1.238, which fires SessionStart with source=compact on a resume (measured
+# 2026-08-23: 92 such events in one session log).
+#
+# The cost of the stale premise was real. An auto-compaction resumes the
+# assistant MID-TURN, so with only the prompt path wired the assistant carried
+# on from the summary with no notice at all until the user happened to type. It
+# ran two full turns that way, and when asked whether its park hooks had fired
+# answered "no" from memory while this very snapshot sat on disk saying
+# otherwise.
+#
+# SessionStart is an ADDITION, never a replacement: a client that fires no
+# SessionStart on compaction still needs the prompt path. Running twice is
+# harmless because the gates below — not the event — decide whether this speaks.
 #
 # ONCE is the whole design. It prints only while the snapshot is newer than the
 # marker it drops, so it costs a few tokens after a compaction and nothing on
