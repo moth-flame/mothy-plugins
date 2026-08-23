@@ -246,6 +246,67 @@ The isolated verifier (§4.5) never sees the eval or its fixtures — same reaso
 it never sees the reproduction test. "Does the eval clear the bar" is the
 orchestrator's call, made from the recorded numbers.
 
+## Blocking decisions go in a question widget (MANDATORY)
+
+When this skill is genuinely blocked on a decision that is the user's to make, ask
+it with `AskUserQuestion` — never as a sentence buried in a report, and never by
+stopping with prose and hoping it is read.
+
+The reason is mechanical, not stylistic. the user reads a feed that keeps scrolling:
+agent notifications, gate output, coord traffic, status lines. A question written
+in prose scrolls up and is gone, and the honest state — *I am stopped, waiting on
+you* — becomes invisible. They answer a question they never saw by not answering it,
+and the fix sits unshipped while the thing it fixes keeps failing.
+
+Assume they have NOT read the paragraph above the question. They probably have not.
+
+**When it fires in this skill** — a fix has its own shapes, and these are the ones
+where guessing is expensive:
+
+- **The behaviour was intentional.** The "bug" is a deliberate choice nobody
+  documented, so fixing it is a product change wearing a bug's clothes. Ask before
+  reverting someone's decision.
+- **A regression test would have to be deleted or inverted** to make the fix pass.
+  That is either the right call or proof the fix is wrong, and the skill cannot
+  tell which from the code alone.
+- **Two root causes are both consistent with the evidence** and the fixes diverge
+  materially — different blast radius, different rollback, different files.
+- **The blast radius exceeds the report.** The minimal fix is clear but it changes
+  behaviour for callers beyond the one that reported the symptom.
+- A true one-way door: no rollback, destroys the only copy of something, a
+  production cutover that cannot be reversed.
+
+**Rules for the question itself:**
+
+- **Recommendation FIRST, marked `(Recommended)`.** Having an opinion is the job.
+  An unranked menu pushes the analysis back onto him, which is the thing asking
+  was supposed to save.
+- **Carry the context INTO the question.** One sentence of what happened and why
+  the choice exists, restated inside the question text — never a reference to
+  something above it ("as noted", "per the finding", "given the above"). If the
+  question is unreadable on its own, it is unreadable.
+- **Each option states its CONSEQUENCE, not its name**, with numbers where a
+  consequence has a measured size — rows affected, callers touched, runs skipped.
+- **Say what is reversible.** "Clears on the next run" and "no rollback" are the
+  two facts that most change an answer.
+- **Name the real trade honestly, including against your own recommendation.**
+- **One decision per question.** Two questions beat one compound option list.
+  Four is the ceiling `AskUserQuestion` accepts.
+
+**The mirror failure is equally bad — do not manufacture stops.** A two-way door
+that the stated intent already covers is yours to decide: make the call,
+record the one-line rationale in the report, and keep going. A fix that is
+reversible by a revert is not a decision to escalate. The test is not "is this
+important," it is **"would I be stopping anyway?"** If yes, that stop belongs in a
+widget rather than in prose. If no, do not invent one.
+
+**A hard gate is not a decision and never becomes an option.** Red-green TDD, the
+pre-push suite, no `--no-verify`/`--amend`/`--force` around a failing hook, and any
+`confirmation_code` bind regardless of how a decision was surfaced or who made it.
+Request a confirmation code; never offer bypassing one as a choice. "Ship the fix
+now, write the regression test after" is not a question to ask — it is the rule
+this skill exists to enforce.
+
 ## When to use
 
 The user says one of:
