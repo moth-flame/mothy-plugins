@@ -53,9 +53,18 @@
 // detect "a newer version exists upstream but was never fetched into the
 // local cache" — that is out of scope for this guard.
 
-import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import {
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+  writeSync,
+  unlinkSync,
+  existsSync,
+  realpathSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve as resolvePath } from 'node:path';
+import { join, resolve as resolvePath, sep as pathSep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const KILL_SWITCH = 'MOTHY_PLUGIN_FRESHNESS';   // default ON; off-values below
@@ -78,7 +87,16 @@ const CLI_UPDATE_COMMAND = ['claude', 'plugin', ['upd', 'ate'].join(''), 'mothy'
  * Split a semver-ish string into numeric components. Returns null when it
  * does not parse as dot-separated non-negative integers (e.g. '0.18.0-beta',
  * 'nightly', 'tmp') — callers SKIP unparseable entries rather than fail.
+ *
+ * MINIMUM THREE COMPONENTS, and that floor is load-bearing. Cache entries are
+ * directory NAMES; a stray directory called '9' parses as [9] and then
+ * out-ranks every real 0.x.y version, producing a permanent false 'stale'. A
+ * guard that cries wolf gets ignored, which ends in the same silence as a
+ * guard that never speaks. A plugin version is major.minor.patch; anything
+ * shorter is not a version we are willing to rank.
  */
+export const MIN_VERSION_COMPONENTS = 3;
+
 export function parseVersion(v) {
   if (typeof v !== 'string') return null;
   const trimmed = v.trim();
@@ -89,7 +107,7 @@ export function parseVersion(v) {
     if (!/^\d+$/.test(part)) return null;
     nums.push(Number(part));
   }
-  if (nums.length === 0) return null;
+  if (nums.length < MIN_VERSION_COMPONENTS) return null;
   return nums;
 }
 
@@ -105,20 +123,23 @@ export function compareVersionParts(a, b) {
 }
 
 /**
- * classifyPluginFreshness({ installedVersion, cachedVersions })
+ * classifyPluginFreshness({ installedVersion, cachedVersions, installedReason })
  *   -> { state: 'current' | 'stale' | 'unknown', installed, newest, reason }
  *
  * installedVersion: string | null | undefined
  * cachedVersions: string[] (directory names from the plugin cache)
+ * installedReason: string | null — why the installed version is unavailable,
+ *   supplied by the entry selector so an AMBIGUOUS multi-entry install reports
+ *   its own cause instead of masquerading as an unreadable file.
  */
-export function classifyPluginFreshness({ installedVersion, cachedVersions } = {}) {
+export function classifyPluginFreshness({ installedVersion, cachedVersions, installedReason } = {}) {
   const installedParsed = parseVersion(installedVersion);
   if (!installedParsed) {
     return {
       state: 'unknown',
       installed: installedVersion ?? null,
       newest: null,
-      reason: 'installed_version_unreadable',
+      reason: installedReason || 'installed_version_unreadable',
     };
   }
 
@@ -153,6 +174,22 @@ export function classifyPluginFreshness({ installedVersion, cachedVersions } = {
 
 // ── impure collectors (kept out of the pure core) ──────────────────────────
 
+/**
+ * CANONICALIZE, do not merely normalize (finding R-10). `path.resolve` cleans
+ * a path but does NOT follow symlinks, while Node ESM realpaths
+ * import.meta.url — so ANY symlink in the invocation path made the two sides
+ * disagree, the run-as-script guard failed, and the hook silently did nothing.
+ * Plugin cache paths are exactly the kind of thing that gets symlinked.
+ * realpathSync throws on a missing path, so fall back to plain resolution.
+ */
+function canonicalPath(p) {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolvePath(p);
+  }
+}
+
 function readJson(path) {
   try {
     return JSON.parse(readFileSync(path, 'utf8'));
@@ -162,33 +199,91 @@ function readJson(path) {
 }
 
 /**
- * Reads ~/.claude/plugins/installed_plugins.json and returns the installed
- * version string for mothy@mothy-marketplace, or null if it cannot be
- * determined. Prefers the entry whose installPath exists on disk; falls back
- * to the first entry, since a single-entry array is the common case and a
- * stale/missing installPath must not turn into "no version at all".
+ * true when `child` IS `parent` or sits underneath it.
+ *
+ * BOTH sides are canonicalized, for the same reason the entrypoint guard is:
+ * process.cwd() returns a realpath while a recorded projectPath does not have
+ * to (on macOS /var is a symlink to /private/var, so the two spellings of one
+ * directory never compare equal). A miss here silently drops back to the
+ * user-scoped entry — the wrong version, reported confidently.
  */
-export function readInstalledVersion(claudeHome) {
-  const doc = readJson(join(claudeHome, 'plugins', 'installed_plugins.json'));
-  if (!doc || typeof doc !== 'object') return null;
-  const entries = doc.plugins?.[PLUGIN_ID];
-  if (!Array.isArray(entries) || entries.length === 0) return null;
+function pathContains(parent, child) {
+  if (typeof parent !== 'string' || typeof child !== 'string' || !parent || !child) return false;
+  const p = canonicalPath(parent);
+  const c = canonicalPath(child);
+  return c === p || c.startsWith(p.endsWith(pathSep) ? p : p + pathSep);
+}
 
-  const withExistingPath = entries.find((e) => e && typeof e.installPath === 'string' && existsSync(e.installPath));
-  const chosen = withExistingPath || entries[0];
-  return chosen && typeof chosen.version === 'string' ? chosen.version : null;
+/**
+ * Choose the installed_plugins.json entry the CURRENT SESSION actually loads.
+ *
+ * WHY THIS IS NOT "entries[0]" (finding R-04). `plugins[<id>]` is an ARRAY and
+ * multi-entry is REAL, not hypothetical — the live file on this machine holds
+ * frontend-design@claude-plugins-official TWICE, scope 'user' and scope
+ * 'project'. Picking the wrong one lets a project-scoped 0.7.0 install report
+ * state:'current' because a user-scoped 0.17.0 entry sat next to it. That is
+ * worse than the forbidden unknown->current: it is STALE->current, i.e. dead
+ * silent in exactly the situation this hook exists for.
+ *
+ * Order: a project-scoped entry whose projectPath contains the cwd wins (it is
+ * the one this session loads), else the user-scoped entries, else any entry
+ * not scoped to some OTHER project. If more than one survivor remains carrying
+ * DIFFERENT versions, we cannot tell which loads — that returns null with a
+ * reason and the caller reports 'unknown'. AMBIGUITY RESOLVES TO UNKNOWN; it
+ * never resolves to a pick.
+ *
+ * Returns { version: string|null, reason: string|null }.
+ */
+export function selectInstalledEntry(entries, cwd) {
+  const list = Array.isArray(entries) ? entries.filter((e) => e && typeof e === 'object') : [];
+  if (list.length === 0) return { version: null, reason: 'no_installed_entry' };
+
+  const projectMatches = list.filter((e) => e.scope === 'project' && pathContains(e.projectPath, cwd));
+  const userScoped = list.filter((e) => e.scope === 'user');
+
+  let candidates;
+  if (projectMatches.length > 0) candidates = projectMatches;
+  else if (userScoped.length > 0) candidates = userScoped;
+  else candidates = list.filter((e) => e.scope !== 'project');
+
+  if (candidates.length === 0) return { version: null, reason: 'no_applicable_installed_entry' };
+
+  const versions = new Set(candidates.map((e) => (typeof e.version === 'string' ? e.version : null)));
+  if (versions.size > 1) return { version: null, reason: 'ambiguous_installed_entries' };
+
+  const [only] = [...versions];
+  if (typeof only !== 'string' || !only) return { version: null, reason: 'installed_entry_version_missing' };
+  return { version: only, reason: null };
+}
+
+/**
+ * Reads ~/.claude/plugins/installed_plugins.json and resolves the version the
+ * session actually loads, via selectInstalledEntry.
+ * Returns { version: string|null, reason: string|null }.
+ */
+export function readInstalledVersion(claudeHome, cwd) {
+  const doc = readJson(join(claudeHome, 'plugins', 'installed_plugins.json'));
+  if (!doc || typeof doc !== 'object') return { version: null, reason: 'installed_plugins_unreadable' };
+  return selectInstalledEntry(doc.plugins?.[PLUGIN_ID], cwd);
 }
 
 /**
  * Reads ~/.claude/plugins/cache/mothy-marketplace/mothy/ — subdirectory
  * names ARE versions. Returns [] when the directory is absent/unreadable.
+ *
+ * A subdirectory only counts when it holds .claude-plugin/plugin.json, i.e.
+ * when it is a real plugin unpack (finding R-10). A leftover scratch directory
+ * whose NAME happens to out-rank every real version would otherwise produce a
+ * permanent false 'stale' — the guard crying wolf until it is muted, which
+ * ends in the same silence as the guard never firing.
  */
 export function readCachedVersions(claudeHome) {
   const dir = join(claudeHome, 'plugins', 'cache', MARKETPLACE_NAME, PLUGIN_NAME);
   try {
     return readdirSync(dir, { withFileTypes: true })
       .filter((e) => e.isDirectory())
-      .map((e) => e.name);
+      .map((e) => e.name)
+      .filter((name) => existsSync(join(dir, name, '.claude-plugin', 'plugin.json')));
   } catch {
     return [];
   }
@@ -200,20 +295,64 @@ function unknownMarkerPath(claudeHome) {
   return join(claudeHome, 'mothy-plugin-freshness-unknown-notice.json');
 }
 
-/** true when it's safe to print the (rate-limited) unknown-state notice. */
-function shouldPrintUnknownNotice(claudeHome, now) {
-  const p = unknownMarkerPath(claudeHome);
+/**
+ * ATOMICALLY claim the once-per-day unknown-notice slot (finding R-09).
+ *
+ * The obvious stat-then-decide-then-write shape is a TOCTOU: two Claude Code
+ * sessions starting at the same moment — routine on this machine, several
+ * repos open — both pass the check and both print. `{ flag: 'wx' }` makes the
+ * create the decision: exactly one process can win it.
+ *
+ * FAIL OPEN, NEVER SILENT. Any error that is not EEXIST (unwritable home,
+ * missing directory) returns true, so a home we cannot stamp costs a repeated
+ * notice rather than a permanently suppressed one. A marker we cannot stat is
+ * likewise treated as unclaimed.
+ *
+ * Returns true when this process now owns the slot and must print.
+ */
+function claimUnknownNotice(claudeHome, now) {
+  const path = unknownMarkerPath(claudeHome);
+  const payload = JSON.stringify({ ts: now });
+
+  const create = () => {
+    try {
+      writeFileSync(path, payload, { flag: 'wx' });
+      return 'won';
+    } catch (err) {
+      if (err && err.code === 'EEXIST') return 'exists';
+      return 'unwritable';
+    }
+  };
+
+  const first = create();
+  if (first === 'won') return true;
+  if (first === 'unwritable') return true; // cannot rate-limit => do not suppress
+
+  let mtimeMs;
   try {
-    const stat = statSync(p);
-    return now - stat.mtimeMs >= UNKNOWN_NOTICE_MAX_PER_DAY_MS;
+    mtimeMs = statSync(path).mtimeMs;
   } catch {
-    return true; // never stamped => allowed
+    return true;
   }
+  if (now - mtimeMs < UNKNOWN_NOTICE_MAX_PER_DAY_MS) return false; // someone told them today
+
+  // Stale marker: retire it and re-claim, still atomically.
+  try {
+    unlinkSync(path);
+  } catch {
+    return true;
+  }
+  const second = create();
+  return second !== 'exists'; // lost the re-claim race => the winner prints
 }
 
-function stampUnknownNotice(claudeHome) {
+/**
+ * Give the slot back. Called ONLY when delivery failed, so a notice nobody
+ * received cannot arm a day of suppression (finding R-03).
+ */
+function releaseUnknownNotice(claudeHome) {
   try {
-    writeFileSync(unknownMarkerPath(claudeHome), JSON.stringify({ ts: Date.now() }));
+    unlinkSync(unknownMarkerPath(claudeHome));
   } catch {
     /* fail open */
   }
@@ -239,9 +378,13 @@ function main() {
   if (off) return;
 
   const claudeHome = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
-  const installedVersion = readInstalledVersion(claudeHome);
+  const installed = readInstalledVersion(claudeHome, process.cwd());
   const cachedVersions = readCachedVersions(claudeHome);
-  const result = classifyPluginFreshness({ installedVersion, cachedVersions });
+  const result = classifyPluginFreshness({
+    installedVersion: installed.version,
+    cachedVersions,
+    installedReason: installed.reason,
+  });
 
   if (result.state === 'stale') {
     say(renderMessage(result));
@@ -251,9 +394,14 @@ function main() {
     // Silent on 'current' always; on 'unknown', at most once per day — never
     // fully silent, because a check that cannot report its own failure is
     // the antipattern this whole feature exists to close.
-    if (shouldPrintUnknownNotice(claudeHome, Date.now())) {
-      say(renderMessage(result));
-      stampUnknownNotice(claudeHome);
+    //
+    // The claim is taken FIRST (atomic, R-09) and RELEASED when the write
+    // failed (R-03): a cooldown is stamped only on confirmed delivery, the
+    // same rule the Slack post-as-user tripwire and the cron-heartbeat
+    // watchdog already run on. Arming a day of silence for a warning that
+    // reached nobody is the failure this whole hook exists to prevent.
+    if (claimUnknownNotice(claudeHome, Date.now())) {
+      if (!say(renderMessage(result))) releaseUnknownNotice(claudeHome);
     }
     return;
   }
@@ -261,16 +409,31 @@ function main() {
   // mute costs the real warning.
 }
 
+/**
+ * Write one line to stdout. Returns TRUE only on a write that actually landed
+ * — the caller uses that as the delivery confirmation before stamping any
+ * cooldown (finding R-03). Arming 24h of suppression for a notice nobody
+ * received is the failure this hook exists to prevent.
+ *
+ * writeSync(1, …), NOT process.stdout.write, and the difference is load
+ * bearing on BOTH counts. Measured against a hook whose stdout is not
+ * writable: `process.stdout.write` returns TRUE, then throws asynchronously
+ * from SyncWriteStream's error event — so the old shape both reported a
+ * delivery that never happened AND crashed the hook with exit code 1, breaking
+ * the always-exit-0 rule. writeSync throws in-band, here, where it can be
+ * caught and reported honestly.
+ */
 function say(text) {
-  if (!text) return;
+  if (!text) return false;
   try {
-    process.stdout.write(`${text}\n`);
+    writeSync(1, `${text}\n`);
+    return true;
   } catch {
-    /* fail open */
+    return false; // NOT delivered — never treat this as a notice given
   }
 }
 
-if (process.argv[1] && resolvePath(process.argv[1]) === resolvePath(fileURLToPath(import.meta.url))) {
+if (process.argv[1] && canonicalPath(process.argv[1]) === canonicalPath(fileURLToPath(import.meta.url))) {
   try {
     main();
   } catch {
