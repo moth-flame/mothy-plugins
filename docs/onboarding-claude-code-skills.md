@@ -23,10 +23,9 @@ missing, which is why this catches people out.
 
 That's all this is: **signing your computer in to GitHub, once.**
 
-It matters twice over. The same sign-in is what lets your skills **keep updating**
-afterwards. A machine that can't authenticate silently freezes on whatever version it
-first received — we found one stuck ten releases behind, with nothing on screen to say
-so.
+Keeping skills **up to date** afterwards is a separate problem, and the sign-in only
+partly helps — see *Checking which version you actually have* below. Do the sign-in
+first; it is what gets you the skills at all.
 
 You need to already be a member of the Moth+Flame GitHub organization. If you're not
 sure, ask Rich before you start — the steps below won't work without it.
@@ -113,8 +112,28 @@ Quit it fully with `Cmd + Q` — closing the window isn't enough. Then reopen it
 
 You should now see **article**, **plan**, **deck** and others in the list.
 
-**If you see them, you're done.** Nothing else to do, ever, on this computer — and
-they'll stay up to date on their own from here.
+**If you see them, you're done** installing.
+
+---
+
+## Checking which version you actually have
+
+**Do not trust the version number in the Plugins panel.** It shows the version that is
+*available*, not the one you are *running*. On a machine ten releases behind, that panel
+still displays the newest version number next to "Last updated 1 hour ago" — measured,
+not theoretical.
+
+To see what you are actually running, ask Claude in a Code session:
+
+Show me the mothy entry from .claude/plugins/installed_plugins.json in my home folder
+
+The `version` field there is the truth. If it is behind, open the `+` menu, choose
+Plugins, then Manage plugins, and update from there.
+
+Updates do **not** reliably happen on their own. Claude Code's background refresh turns
+off git credential helpers, so against a private repository it cannot authenticate and
+falls back to a re-clone that often does not complete. Until that changes, check your
+version occasionally rather than assuming.
 
 ---
 
@@ -190,9 +209,20 @@ check what a Desktop machine actually has, read `~/.claude/plugins/known_marketp
 and `~/.claude/plugins/installed_plugins.json`. An entry there with `"scope": "managed"`
 is positive proof the admin-console push reached that machine.
 
-The same credential gap also breaks **updates**, not just the first install. Background
-plugin updates run with credential helpers disabled and fall back to a re-clone using the
-person's own credentials; against a private repo with none configured, that fails
-silently and the machine stays on its original version forever. A machine with the
-sign-in done updates normally. This is why the step is worth insisting on even for
-someone whose skills appear to be working.
+**Updates are a separate, unsolved problem — do not tell people the sign-in fixes it.**
+Claude Code's background refresh disables git credential helpers for its pull, so against
+a private repo it cannot authenticate *even where a helper is configured*, and falls back
+to a re-clone the docs themselves describe as intermittent. Measured here: a machine that
+clones the repo fine interactively sat on 0.8.0 for six days while the repo reached
+0.18.0, and never updated once.
+
+**And the Plugins panel actively hides this.** It renders the marketplace's advertised
+version, not the installed one — that machine's panel read "0.18.0, last updated 1 hour
+ago" while the only build on disk was 0.8.0 from six days earlier. The install record in
+`installed_plugins.json` is the only honest source.
+
+Reliable fixes, none free: point the marketplace at an **SSH** remote (background pulls
+authenticate from ssh-agent, but everyone needs a key), or configure a global git URL
+rewrite embedding a token (works, but puts a credential on every laptop). Setting
+`CLAUDE_CODE_PLUGIN_KEEP_MARKETPLACE_ON_FAILURE=1` does not fix updates — it only stops a
+failed pull from deleting a working clone.
