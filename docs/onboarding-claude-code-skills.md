@@ -1,228 +1,61 @@
-# Getting the Moth+Flame skills working in Claude Code
+# Getting the Mothy skills in Claude Code
 
-**Who this is for:** anyone at Moth+Flame who wants `/article`, `/plan`, `/deck` and
-the rest of our skills to work in the **Code** tab of Claude Desktop.
+**You should not need this page. Ask Claude instead.**
 
-**How long:** about five minutes, once per computer. You never have to do it again on
-that machine.
+In Claude chat or Cowork, say:
 
-**You do not need to be technical.** Every step is copy, paste, and click.
+> How do I update the Mothy skills in Claude Code?
 
----
+Claude will walk you through it one command at a time, read your terminal output back, and tell you what to do next. That is the supported path — it handles the error messages this page cannot anticipate, and it does not ask you to interpret anything.
 
-## Why this is needed
-
-Our skills reach you two different ways, and only one of them is automatic.
-
-- **In Chat**, they arrive from your Claude account. Nothing to set up — they just appear.
-- **In Code**, Claude has to download them onto your actual computer from our private
-  GitHub repository. Your computer needs to prove it's allowed to read that repository.
-
-Until it can, the Code tab quietly has no skills. Nothing warns you — they're simply
-missing, which is why this catches people out.
-
-That's all this is: **signing your computer in to GitHub, once.**
-
-Keeping skills **up to date** afterwards is a separate problem, and the sign-in only
-partly helps — see *Checking which version you actually have* below. Do the sign-in
-first; it is what gets you the skills at all.
-
-You need to already be a member of the Moth+Flame GitHub organization. If you're not
-sure, ask Rich before you start — the steps below won't work without it.
+This page exists for the two cases where that is not available to you.
 
 ---
 
-## Windows
+## If you just want the commands
 
-### Step 1 — Open Git Bash
-
-Click **Start**, type `Git Bash`, and open it. A small black window appears.
-
-**Don't see it?** Git isn't installed. Download it from **https://git-scm.com/download/win**,
-run the installer accepting every default, then **restart Claude Desktop** and come back here.
-
-### Step 2 — Sign in
-
-Copy this line, paste it into the black window, and press Enter:
+Open Terminal (Mac: Applications → Utilities → Terminal) or Git Bash (Windows). Paste these **in this order**:
 
 ```
-git ls-remote https://github.com/moth-flame/mothy-plugins.git
+claude plugin marketplace update mothy-marketplace
+claude plugin update mothy@mothy-marketplace
 ```
 
-> **Paste in Git Bash is right-click, not Ctrl+V.**
+Then **quit Claude completely and reopen it.**
 
-A **GitHub sign-in window should open in your browser.** Sign in with the account that's
-on our Moth+Flame organization. If it asks you to authorize "Git Credential Manager,"
-say yes.
-
-**What success looks like:** a wall of long letter-and-number codes fills the window.
-That's it — you're signed in permanently.
-
-**If it just sits there doing nothing for more than a minute**, press `Ctrl+C` and skip
-to *If the simple way didn't work* below.
-
-### Step 3 — Restart Claude Desktop properly
-
-Closing the window is not enough — the app keeps running in the background.
-
-Find the Claude icon in your **system tray** (bottom-right of your screen, possibly
-hidden behind the small `^` arrow), **right-click it, and choose Quit**. Then open
-Claude Desktop again.
-
-Now go to **Step 4 — Check it worked**.
-
----
-
-## Mac
-
-### Step 1 — Open Terminal
-
-Press `Cmd + Space`, type `Terminal`, press Enter. A window appears.
-
-### Step 2 — Sign in
-
-Copy this line, paste it into the Terminal window, and press Enter:
+If the second line says the plugin is in *managed scope*, re-run just that line as:
 
 ```
-git ls-remote https://github.com/moth-flame/mothy-plugins.git
+claude plugin update mothy@mothy-marketplace --scope managed
 ```
 
-Three things can happen:
+That is the whole update procedure.
 
-- **A wall of long letter-and-number codes appears.** You're already signed in. Nothing
-  more to do — go to Step 3.
-- **A box pops up asking to install developer tools.** Click Install, wait for it to
-  finish, then run the line again.
-- **It asks you for a Username and Password.** Press `Ctrl+C` to stop, and go to
-  *If the simple way didn't work* below. Don't type your GitHub password — GitHub
-  stopped accepting passwords here, so it won't work.
+## First time only
 
-### Step 3 — Restart Claude Desktop properly
-
-Quit it fully with `Cmd + Q` — closing the window isn't enough. Then reopen it.
-
----
-
-## Step 4 — Check it worked
-
-1. Open Claude Desktop and click the **Code** tab.
-2. Start a new session.
-3. Near the prompt box, make sure **Environment** is set to **Local**.
-4. Type a single `/` in the prompt box.
-
-You should now see **article**, **plan**, **deck** and others in the list.
-
-**If you see them, you're done** installing.
-
----
-
-## Checking which version you actually have
-
-**Do not trust the version number in the Plugins panel.** It shows the version that is
-*available*, not the one you are *running*. On a machine ten releases behind, that panel
-still displays the newest version number next to "Last updated 1 hour ago" — measured,
-not theoretical.
-
-To see what you are actually running, ask Claude in a Code session:
-
-Show me the mothy entry from .claude/plugins/installed_plugins.json in my home folder
-
-The `version` field there is the truth. If it is behind, open the `+` menu, choose
-Plugins, then Manage plugins, and update from there.
-
-Updates do **not** reliably happen on their own. Claude Code's background refresh turns
-off git credential helpers, so against a private repository it cannot authenticate and
-falls back to a re-clone that often does not complete. Until that changes, check your
-version occasionally rather than assuming.
-
----
-
-## If the simple way didn't work
-
-This installs a small official GitHub tool that handles the sign-in for you. Still no
-technical knowledge required.
-
-**Windows** — open Git Bash and paste:
-
-```
-winget install --id GitHub.cli
-```
-
-**Mac** — download and run the installer from **https://cli.github.com**.
-
-Then **close and reopen** the black window / Terminal, paste this, and press Enter:
+You also need a one-time GitHub sign-in, because the plugin repository is private:
 
 ```
 gh auth login
 ```
 
-Answer the questions with the arrow keys and Enter:
+Choose **GitHub.com → HTTPS → yes to authenticate git → Login with a web browser**, and sign in with your **@mothandflamevr.com** account. Then:
 
-| It asks | Choose |
-|---|---|
-| What account do you want to log into? | **GitHub.com** |
-| What is your preferred protocol? | **HTTPS** |
-| Authenticate Git with your GitHub credentials? | **Yes** — this one matters, don't skip it |
-| How would you like to authenticate? | **Login with a web browser** |
+```
+claude plugin marketplace add moth-flame/mothy-plugins
+claude plugin install mothy@mothy-marketplace
+```
 
-It shows you a short code, then opens your browser. Paste the code, sign in, approve.
-
-Now go back and do **Step 3** (restart Claude Desktop properly) and **Step 4**.
+Quit and reopen Claude. If `gh` is not found on a Mac, install it with `brew install gh` first.
 
 ---
 
-## Troubleshooting
+## Two things that will mislead you
 
-| What you see | What it means | What to do |
-|---|---|---|
-| The command sits there for minutes with no output | It's silently waiting for a sign-in that can't appear | Press `Ctrl+C`, use *If the simple way didn't work* |
-| `Repository not found` or a `404` | Your GitHub account isn't on our organization, or you signed in with a personal account | Message Rich with the GitHub username you used |
-| It asks for a Username and Password | No sign-in helper is set up on this machine | Press `Ctrl+C`, use *If the simple way didn't work* |
-| `claude: command not found` | Completely normal | Ignore it. That's a separate terminal tool you don't need |
-| Skills still missing after all of this | Something environment-specific | Message Rich — include what the command printed |
+**The order of the two update commands is the entire fix.** Claude Code never refreshes its copy of the plugin catalog on its own, so running `claude plugin update` alone reinstalls the old version and reports success. This is an open Claude Code bug, not a Moth+Flame misconfiguration.
 
-**Two things that quietly waste time:**
+**The Plugins panel in Settings shows the catalog version, not your installed version.** It will happily display a version you do not have. Do not use it to check whether the update worked — type `/` in Claude Code and look for `/article`, `/deck`, `/plan`.
 
-- **Closing the Claude window is not quitting it.** On Windows quit from the system
-  tray; on Mac use `Cmd + Q`. The skills only load when the app actually starts fresh.
-- **Environment must be Local.** A Cloud session gets its skills a completely different
-  way, and none of the steps above apply to it.
+## If something goes wrong
 
----
-
-## For whoever is helping someone through this
-
-The failure is always the same: `extraKnownMarketplaces` and `enabledPlugins` are pushed
-org-wide from the Claude admin console, so every machine is *told* to install the
-plugin — but the marketplace lives in a **private** repository, and managed settings
-deliver configuration, never credentials. The clone fails, silently, and Claude Code
-carries on without the skills.
-
-`git ls-remote` against the marketplace repo is the whole diagnostic. It hangs when a
-credential prompt has nowhere to display, 404s when the account lacks access, and
-returns refs when everything is fine.
-
-Note that a session running *inside* Claude cannot complete this — an interactive
-sign-in has no window there. It has to be a terminal the person opened themselves.
-`/status` and `claude doctor` are CLI-only and do **not** exist in Claude Desktop; to
-check what a Desktop machine actually has, read `~/.claude/plugins/known_marketplaces.json`
-and `~/.claude/plugins/installed_plugins.json`. An entry there with `"scope": "managed"`
-is positive proof the admin-console push reached that machine.
-
-**Updates are a separate, unsolved problem — do not tell people the sign-in fixes it.**
-Claude Code's background refresh disables git credential helpers for its pull, so against
-a private repo it cannot authenticate *even where a helper is configured*, and falls back
-to a re-clone the docs themselves describe as intermittent. Measured here: a machine that
-clones the repo fine interactively sat on 0.8.0 for six days while the repo reached
-0.18.0, and never updated once.
-
-**And the Plugins panel actively hides this.** It renders the marketplace's advertised
-version, not the installed one — that machine's panel read "0.18.0, last updated 1 hour
-ago" while the only build on disk was 0.8.0 from six days earlier. The install record in
-`installed_plugins.json` is the only honest source.
-
-Reliable fixes, none free: point the marketplace at an **SSH** remote (background pulls
-authenticate from ssh-agent, but everyone needs a key), or configure a global git URL
-rewrite embedding a token (works, but puts a credential on every laptop). Setting
-`CLAUDE_CODE_PLUGIN_KEEP_MARKETPLACE_ON_FAILURE=1` does not fix updates — it only stops a
-failed pull from deleting a working clone.
+Paste the terminal output into Claude chat and ask what it means. Do not delete anything under `~/.claude` by hand.
