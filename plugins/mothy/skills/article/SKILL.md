@@ -1,6 +1,6 @@
 ---
 name: article
-description: Produce a Zoho Desk Knowledge Base article from a product-demo flow — embed the demo VIDEO at the top, then a written step-by-step walkthrough with one screenshot per click/type action, so a reader gets the same step-by-step parity they'd get from watching the video. Use when the user says "/article", "make a KB article", "turn this demo into a help article", "write a knowledge base article", "publish a walkthrough to Zoho Desk", or asks to convert a captured demo flow into Zoho Desk documentation. Ideally consumes the per-step artifacts a `/video` run already captured. NOT for blog posts, in-app copy, slide decks, or publishing live (always a Draft).
+description: Produce a Zoho Desk Knowledge Base article from a product-demo flow — embed the demo VIDEO at the top, then a written step-by-step walkthrough with one screenshot per click/type action, so a reader gets the same step-by-step parity they'd get from watching the video. Use when the user says "/article", "make a KB article", "turn this demo into a help article", "write a knowledge base article", "publish a walkthrough to Zoho Desk", or asks to convert a captured demo flow into Zoho Desk documentation. Publishes through the `mothy` MCP actions `zoho_kb_categories` then `zoho_kb_article_create` (server-side credentials, Draft-only) — never through `zoho_kb_search`/`zoho_kb_article`, which are read-only. If publishing fails, name the real blocker (missing ZOHO_* creds, no connector, no source flow), never "no tool exists". Ideally consumes the per-step artifacts a `/video` run already captured. NOT for blog posts, in-app copy, slide decks, or publishing live (always a Draft).
 ---
 
 # article — Zoho Desk KB article producer (from a demo flow)
@@ -42,6 +42,50 @@ The **source flow** is the matching `/video` run for this `flowId`: its per-step
 
 The CommandIQ values above are the documented example. Resolve every value from the loaded config at runtime — a different flow points the article at a different (still Draft) destination without editing this SKILL.
 
+## Publishing path — and how to name the blocker correctly
+
+There are **two** ways this skill reaches Zoho. Pick the first one that applies.
+
+**Path A — the `mothy` MCP connector (DEFAULT; use this unless you know Path B applies).**
+The Zoho credentials live server-side on mothy-mcp, so nobody needs their own:
+
+1. `mothy({action: "zoho_kb_categories", params: {}})` → the root categories and the
+   **section** ids under each. Article ids and category ids are different things; a wrong
+   category files the draft where nobody will find it.
+2. `mothy({action: "zoho_kb_article_create", params: {title, body_html, category_id, permission?}})`
+   → creates the article as a **Draft** and returns its id plus an **editor link**.
+
+`status` is not a parameter on that action and never will be — it is pinned to `Draft`
+server-side, so this path structurally cannot publish. A human reviews and publishes in the
+Zoho editor. Executable HTML (script tags, inline `on*=` handlers, iframes, `javascript:`
+URLs) is **refused, not stripped** — a strip is silent, and you would never learn the body
+you wrote is not the body that shipped. A Draft has **no public help-center URL**; the reply
+returns `public_url: null` deliberately, so do not quote a portal link for a draft.
+
+**Path B — direct Zoho Desk REST (`POST /api/v1/articles`).**
+Only when the machine you are running on actually carries `ZOHO_CLIENT_ID` /
+`ZOHO_CLIENT_SECRET` / `ZOHO_REFRESH_TOKEN` (env var → `$MOTHY_STATE_DIR` →
+`~/.mothy/.state/zoho-creds.json`). That is the automated render pipeline's path and
+Rich's own machine; it is **not** the general case. §5 below describes it.
+
+**If you cannot publish, say WHY — and the reason is almost never "no tool exists."**
+This skill has never published through `zoho_kb_search` / `zoho_kb_article`; those are the
+READ half and always have been. Looking for a write tool among them, finding none, and
+reporting that Zoho cannot be reached is a **misdiagnosis of your own failure**, and it sends
+the reader hunting for a capability that was never the path. The real blockers, in the order
+they actually occur:
+
+| Symptom | Actual blocker | What to say |
+|---|---|---|
+| `zoho_not_configured` from the MCP action | The mothy-mcp server is missing the `ZOHO_*` Vercel env vars | Name the env vars; it is a server config fix, not your limitation |
+| No `mothy` connector in this session | The caller has no Mothy MCP connector | Say the connector is missing and Path B needs local creds |
+| Path B, no creds on this machine | `ZOHO_CLIENT_ID` / `_SECRET` / `_REFRESH_TOKEN` unset | Say **"missing ZOHO_* credentials"** — then use Path A instead |
+| No `/video` capture and no flow config for this topic | There is no source flow, so no per-step screenshots | Say so plainly; the article can still be written from other source material, it just will not have capture-parity screenshots. Flag that the copy was **not** checked against the live UI |
+
+A Google Doc is a reasonable **fallback deliverable** when a Draft genuinely cannot be
+created — but only after Path A has actually been tried, and the summary must say which
+blocker it hit.
+
 ## Orchestration (orchestrator-only — same model as `/build`)
 
 **This skill runs orchestrator-only, exactly like `/build` (see `/build` SKILL.md — orchestrator-only mode) and its sibling `/video`.** The main thread conducts; it does NOT itself perform any execution step. It keeps its context free for orchestration decisions and reviews the returned Draft.
@@ -70,7 +114,7 @@ The whole Zoho pipeline (token → categories → HTML assembly with embedded im
 - **Run in background and fan out independent articles in a single message** (separate messages serialize them). Sequence dependent steps within the agent's brief (categories before HTML assembly before article create).
 - **Each agent reports its verdict before finishing** — the Draft article id + URL, the section it landed under, the embedded-image count, and confirmation it left `status=Draft`.
 - **Review the agent's output before accepting** — read the returned Draft preview and judge reader parity (every click/type step has a screenshot + instruction; no orphan images; video embedded at top) before reporting to the user.
-- **Secrets stay env-var-first and are never printed by agents.** Resolve Zoho creds env-var-first: `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` (resolution order: env var → `$MOTHY_STATE_DIR` → `~/.mothy/.state/zoho-creds.json`; minted tokens cache at `~/.mothy/.state/zoho-tokens.json`). Brief every agent to read them from there and never echo a secret or token into a report, log, or committed file, and never commit `.state/` creds or the article images.
+- **Prefer Path A (the `mothy` connector) so no agent ever handles a Zoho credential at all.** On Path B only: **secrets stay env-var-first and are never printed by agents.** Resolve Zoho creds env-var-first: `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` (resolution order: env var → `$MOTHY_STATE_DIR` → `~/.mothy/.state/zoho-creds.json`; minted tokens cache at `~/.mothy/.state/zoho-tokens.json`). Brief every agent to read them from there and never echo a secret or token into a report, log, or committed file, and never commit `.state/` creds or the article images.
 
 ## 0. Plan + confirm scope first
 
@@ -194,7 +238,11 @@ Clean, semantic markup compatible with Zoho's KB editor:
 3. [ ] HTML sanitize: data: URIs image/* only; no `<script>`; no `on*`; no `javascript:`; semantic HTML only.
 → only if all three pass: create the Draft.
 
-## 5. Create the Draft + return the URL
+## 5. Create the Draft + return the URL (PATH B — direct REST)
+
+> On **Path A** this whole section collapses to two `mothy` calls (`zoho_kb_categories`, then
+> `zoho_kb_article_create`), which do the token mint, the POST and the Draft pin server-side.
+> Read this section only when the machine genuinely carries the `ZOHO_*` creds.
 
 Dispatch this whole sequence to ONE sub-agent (per the Orchestration section) — the main thread does not run these steps itself; it runs the publish gate and reviews the agent's returned Draft. The agent's brief covers, in order:
 

@@ -44,6 +44,12 @@
           "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/arm-push-gate.mjs\" 2>/dev/null || true",
           "timeout": 25,
           "statusMessage": "Checking this repo's pre-push gate..."
+        },
+        {
+          "type": "command",
+          "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/check-plugin-freshness.mjs\" 2>/dev/null || true",
+          "timeout": 5,
+          "statusMessage": "Checking plugin freshness..."
         }
       ]
     }
