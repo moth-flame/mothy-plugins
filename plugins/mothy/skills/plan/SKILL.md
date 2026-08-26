@@ -115,8 +115,14 @@ exact.
 ```js
 const CAVEMAN_ULTRA = `
 RESPONSE MODE: ultra caveman. Drop articles (a/an/the), filler (just/really/basically/actually),
-pleasantries, hedging. Fragments OK. Short synonyms (big not extensive, fix not "implement").
+pleasantries. Fragments OK. Short synonyms (big not extensive, fix not "implement").
 Technical terms exact. Code blocks unchanged. File paths exact. Enum values exact.
+CALIBRATION IS CONTENT, NOT FILLER. Never compress away uncertainty, a qualifier, a severity or
+a confidence level. "Might be exploitable" and "is exploitable" are different claims, and for a
+verifier or a security reviewer the qualifier IS the finding. Keep whichever one is true.
+NO LENGTH BUDGET. Caveman is about wording, never about how much you investigate or how many
+findings you report. Dropping a finding to be brief makes "cut for space" indistinguishable from
+"never found it" — measured, that is exactly how a shorter answer became a wrong answer.
 Pattern: [thing] [action] [reason]. [next].
 NOT: "I think the architecture should probably introduce a new abstraction layer that..."
 YES: "New abstraction layer. Decouple X from Y. Reason: Y churn high."
