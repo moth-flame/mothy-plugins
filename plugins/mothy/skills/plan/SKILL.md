@@ -399,6 +399,17 @@ const PLAN_SCHEMA = {
 
 ## Orchestration boilerplate (illustrative)
 
+> **If your harness is Claude Code, the shape below is the `Workflow` tool.** Call
+> it with a script whose `meta` declares `name`, `description` and a `phases` list
+> matching your `phase()` calls, then use `agent()` for a single pass,
+> `parallel()` when you genuinely need every result before the next stage, and
+> `pipeline()` — the default — when each item can flow through the stages
+> independently. Run it in the background and keep the returned `runId` and
+> `scriptPath`: that pair is what lets a dropped connection resume instead of
+> restart. **If you do not have that tool, nothing here is lost** — run the same
+> phases sequentially per §0.3. The phases are the method; the tool is one way to
+> execute them.
+
 Illustrative, not required — run the roles sequentially and independently if the
 harness has no parallel sub-agents (§0.3).
 
