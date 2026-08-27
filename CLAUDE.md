@@ -46,7 +46,7 @@ Mothy is two cooperating surfaces — never confuse them
   metadata). Bump `version` when shipping plugin changes.
 - `plugins/mothy/commands/*.md` — **thin** slash-command entrypoints (`/connect`,
   `/brief`, `/deck`, `/video`, `/article`, `/video-setup`, `/onboard`,
-  `/edit-in-place`, `/dev-setup`, plus the engineering set `/plan`, `/build`,
+  `/edit-in-place`, `/dev-setup`, `/mc`, `/update-skills`, plus the engineering set `/plan`, `/build`,
   `/test`, `/fix`, `/audit`). **Every skill that users are told to invoke by
   name needs one** — `audit` and `dev-setup` shipped for weeks advertising
   `/audit` and `/dev-setup` in their own `description:` while no such command
@@ -93,11 +93,13 @@ Mothy is two cooperating surfaces — never confuse them
   `ONBOARDING.md`, `VIDEO-ARTICLE-RUNBOOK.md`.
 - `plugins/mothy/hooks/` — the shipped hooks: the PreCompact pair
   (`precompact-snapshot.sh` + `auto-park.mjs`), the `UserPromptSubmit` notice
-  (`post-compaction-notice.sh`), and the SessionStart pre-push arming hook
-  (`arm-push-gate.mjs` — see below). **Wiring is deliberately duplicated in
-  `hooks/hooks.json` AND `.claude-plugin/plugin.json`** because we do not know
-  which one a given Claude Code version reads; `tests/arm-push-gate.test.mjs`
-  asserts the two are deep-equal, so they cannot drift.
+  (`post-compaction-notice.sh`), the SessionStart question-widget policy
+  (`inject-mc-policy.mjs` — kill switch `MOTHY_MC_ALWAYS_ON`, default ON), and
+  the SessionStart pre-push arming hook (`arm-push-gate.mjs` — see below).
+  **Wiring is deliberately duplicated in `hooks/hooks.json` AND
+  `.claude-plugin/plugin.json`** because we do not know which one a given
+  Claude Code version reads; `tests/arm-push-gate.test.mjs` asserts the two are
+  deep-equal, so they cannot drift.
 - `tests/*.mjs` — `node --test` guards (manifest shape, artifact contract,
   creds resolver, vendored-tooling presence, the compaction hooks, the pre-push
   arming hook).
@@ -164,6 +166,19 @@ wiring wraps it in `2>/dev/null || true`.
 **What it cannot do:** it cannot tell whether the repo's gate is any *good*, it
 cannot arm anything for a repo that never authored a hook, and its step-7
 warning depends on the repo documenting its own rule in `CLAUDE.md`/`AGENTS.md`.
+
+## `inject-mc-policy.mjs` — always-on question widgets
+
+**The gap it closes.** `/mc` used to turn on AskUserQuestion only *after* someone
+typed it. Teammates never type it, so blocking questions land as prose that
+scrolls off a feed and sit unanswered. This SessionStart hook prints a short
+`<mc-policy>` block on ordinary session starts so the model uses the widget
+without waiting for `/mc`.
+
+**Kill switch:** `MOTHY_MC_ALWAYS_ON=0` (default ON). Off-values `0|off|false|no`.
+Skips `source=compact` so auto-compact does not repeat the block. Always exit 0;
+wiring is `2>/dev/null || true`. READ-ONLY. The `/mc` skill still works when
+invoked even if the hook is off.
 
 ## Run / test / publish
 

@@ -185,9 +185,11 @@ const EXPECTED_COMMANDS = [
   'dev-setup',
   'edit-in-place',
   'fix',
+  'mc',
   'onboard',
   'plan',
   'test',
+  'update-skills',
   'video',
   'video-setup',
 ];

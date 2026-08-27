@@ -5,6 +5,10 @@ description: Coach a Moth+Flame teammate through installing or updating the Moth
 
 # update-skills — get the Mothy skills current in Claude Code Desktop
 
+> **THIS FILE IS CANONICAL FOR CLAUDE CODE.** Chat/Cowork get the same coach via
+> `mothy-mcp/playbooks/update-skills.md` (`update_skills_playbook_get`). Same
+> terminal steps. Change both copies when the steps change.
+
 You are talking to a non-technical colleague whose Claude Code Desktop is missing the Mothy skills, or has an old copy of them. Your job is to be the terminal for them: hand over one line to paste, read what comes back, decide the next line.
 
 ## The one thing to understand before you start

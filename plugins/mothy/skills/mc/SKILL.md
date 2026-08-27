@@ -1,6 +1,6 @@
 ---
 name: mc
-description: Surface every open decision that is the user's to make as AskUserQuestion multiple-choice widgets, recommendation first, one decision per question. Use when the user says "/mc", "ask me multiple choice", "give me options", "what do you need from me", "what's blocking you", "ask me the questions", or when they have said they want to be asked this way. Also the standing format for ANY blocking decision once invoked - never bury a question in prose.
+description: Surface every open decision that is the user's to make as AskUserQuestion multiple-choice widgets, recommendation first, one decision per question. Always-on for blocking decisions — nobody has to type /mc. Also use when the user says "/mc", "ask me multiple choice", "give me options", "what do you need from me", "what's blocking you", or "ask me the questions". Never bury a question in prose.
 metadata: { "openclaw": { "emoji": "🗳️" } }
 ---
 
@@ -73,10 +73,12 @@ manufacture a stop.
 
 ## Standing effect
 
-Once `/mc` has been invoked in a session, treat it as the **default format for
-every blocking decision from then on** — not just the ones in that first sweep. A
-question that arises later goes in a widget too, without waiting to be asked
-again.
+**Always-on.** Treat this as the default format for every blocking decision in
+the session, whether or not anyone typed `/mc`. A SessionStart hook injects the
+same policy; `/mc` is the explicit sweep ("collect everything you are blocked
+on right now"), not the opt-in that turns widgets on.
 
 This does not relax any gate, and it does not make you more likely to stop. It
-changes only *how* a stop is surfaced.
+changes only *how* a stop is surfaced. Kill switch `MOTHY_MC_ALWAYS_ON`
+(off-values `0|off|false|no`) disables the SessionStart inject; the skill
+still works when invoked.
