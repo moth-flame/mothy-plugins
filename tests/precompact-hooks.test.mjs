@@ -21,6 +21,7 @@ import { readFileSync, writeFileSync, existsSync, mkdtempSync, mkdirSync, chmodS
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readBothHookEventMaps } from './hook-wiring.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOOKS = join(ROOT, 'plugins', 'mothy', 'hooks');
@@ -55,9 +56,8 @@ function fresh() {
 }
 
 test('both wiring locations declare the same two events', () => {
-  const hooksJson = JSON.parse(readFileSync(join(HOOKS, 'hooks.json'), 'utf8'));
-  const pluginJson = JSON.parse(readFileSync(join(ROOT, 'plugins', 'mothy', '.claude-plugin', 'plugin.json'), 'utf8'));
-  for (const src of [hooksJson, pluginJson.hooks]) {
+  const { fromFile, fromPlugin } = readBothHookEventMaps();
+  for (const src of [fromFile, fromPlugin]) {
     assert.ok(src, 'both hooks.json and plugin.json.hooks must exist');
     assert.ok(src.PreCompact, 'PreCompact must be declared');
     assert.ok(src.UserPromptSubmit, 'UserPromptSubmit must be declared');

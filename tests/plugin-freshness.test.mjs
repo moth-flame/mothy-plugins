@@ -58,6 +58,7 @@ import {
   readCachedVersions,
   readInstalledVersion,
 } from '../plugins/mothy/hooks/check-plugin-freshness.mjs';
+import { eventsFromHooksFile } from './hook-wiring.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOOKS_DIR = join(ROOT, 'plugins', 'mothy', 'hooks');
@@ -229,7 +230,7 @@ function sessionStartCommands(sessionStartArray) {
 
 test('F12a check-plugin-freshness.mjs is registered on SessionStart in hooks/hooks.json', () => {
   const doc = JSON.parse(readFileSync(HOOKS_JSON, 'utf8'));
-  const commands = sessionStartCommands(doc.SessionStart);
+  const commands = sessionStartCommands(eventsFromHooksFile(doc).SessionStart);
   assert.ok(
     commands.some((c) => c.includes('check-plugin-freshness.mjs')),
     `hooks/hooks.json SessionStart must run check-plugin-freshness.mjs; found: ${JSON.stringify(commands)}`,

@@ -18,6 +18,7 @@ import {
   shouldInjectMcPolicy,
   MC_POLICY_BLOCK,
 } from '../plugins/mothy/hooks/inject-mc-policy.mjs';
+import { readBothHookEventMaps } from './hook-wiring.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOOKS = join(ROOT, 'plugins', 'mothy', 'hooks');
@@ -65,9 +66,8 @@ test('policy block names the widget, the two-way-door rule, and (Recommended)', 
 });
 
 test('WIRING: inject-mc-policy.mjs is on SessionStart in BOTH hook files', () => {
-  const hooksJson = JSON.parse(readFileSync(join(HOOKS, 'hooks.json'), 'utf8'));
-  const pluginJson = JSON.parse(readFileSync(join(ROOT, 'plugins', 'mothy', '.claude-plugin', 'plugin.json'), 'utf8'));
-  for (const src of [hooksJson, pluginJson.hooks]) {
+  const { fromFile, fromPlugin } = readBothHookEventMaps();
+  for (const src of [fromFile, fromPlugin]) {
     const s = JSON.stringify(src.SessionStart);
     assert.match(s, /inject-mc-policy\.mjs/);
     assert.match(s, /CLAUDE_PLUGIN_ROOT/);

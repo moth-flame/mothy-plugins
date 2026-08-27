@@ -28,6 +28,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { decideArming, verdictAfterArming } from '../plugins/mothy/hooks/arm-push-gate.mjs';
+import { readBothHookEventMaps } from './hook-wiring.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOOKS = join(ROOT, 'plugins', 'mothy', 'hooks');
@@ -383,11 +384,10 @@ test('SOURCE: the effective-hook probe resolves core.hooksPath', () => {
 // ── wiring ────────────────────────────────────────────────────────────────
 
 test('WIRING: SessionStart is declared, identically, in BOTH wiring locations', () => {
-  const hooksJson = JSON.parse(readFileSync(join(HOOKS, 'hooks.json'), 'utf8'));
-  const pluginJson = JSON.parse(readFileSync(join(ROOT, 'plugins', 'mothy', '.claude-plugin', 'plugin.json'), 'utf8'));
-  assert.deepEqual(pluginJson.hooks, hooksJson,
-    'the two wiring locations must stay byte-for-byte in sync — we do not know which one a given Claude Code version reads');
-  for (const src of [hooksJson, pluginJson.hooks]) {
+  const { fromFile, fromPlugin } = readBothHookEventMaps();
+  assert.deepEqual(fromFile, fromPlugin,
+    'the two event maps must stay in sync — we do not know which location a given Claude Code version reads');
+  for (const src of [fromFile, fromPlugin]) {
     assert.ok(src.SessionStart, 'SessionStart must be declared');
     const s = JSON.stringify(src.SessionStart);
     assert.match(s, /arm-push-gate\.mjs/);

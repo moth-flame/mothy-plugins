@@ -98,8 +98,12 @@ Mothy is two cooperating surfaces — never confuse them
   the SessionStart pre-push arming hook (`arm-push-gate.mjs` — see below).
   **Wiring is deliberately duplicated in `hooks/hooks.json` AND
   `.claude-plugin/plugin.json`** because we do not know which one a given
-  Claude Code version reads; `tests/arm-push-gate.test.mjs` asserts the two are
-  deep-equal, so they cannot drift.
+  Claude Code version reads. The event maps must stay identical, but the
+  FILE shape is different: `hooks.json` must be `{ "hooks": { …events } }`
+  (Claude Code 2.1+ validates that file as a record under a `hooks` key —
+  a top-level event map fails the whole plugin, lived through 0.24.0).
+  `plugin.json`'s `"hooks"` key already IS that wrapper, so its value is
+  the event map. `tests/hook-wiring.test.mjs` pins both facts.
 - `tests/*.mjs` — `node --test` guards (manifest shape, artifact contract,
   creds resolver, vendored-tooling presence, the compaction hooks, the pre-push
   arming hook).

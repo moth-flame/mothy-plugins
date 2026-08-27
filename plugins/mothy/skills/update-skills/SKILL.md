@@ -40,7 +40,8 @@ claude plugin list
 
 Then branch on what comes back:
 
-- **A list including `mothy`** → they have it. Go to Step 2 to update it.
+- **A list including `mothy` with Status enabled** → they have it. Go to Step 2 to update it.
+- **`failed to load` with `expected record` / `"path": ["hooks"]`** → known plugin bug through 0.24.0, not their install. Same Step 2; they need **0.24.1 or later**. Do not tell them to edit JSON.
 - **`command not found: claude`** → they have Claude Desktop but not the command-line tool. Stop and say so plainly: this update cannot be done from the Desktop app's buttons today, and they need either the Claude Code CLI installed or someone with a terminal to do it for them. Do not send them into the Settings panel to hunt for an Update button — it is greyed out or lies, and that is a known bug.
 - **A list with no `mothy` line** → they have never installed it. Go to Step 3.
 
@@ -124,3 +125,4 @@ Two things worth saying out loud when they hit trouble, because people assume th
 - Do not tell them to run `/status` — it does not exist in Claude Desktop.
 - Do not suggest reinstalling the app, clearing caches by hand, or deleting folders under `~/.claude`. The two commands in Step 2 are the fix; hand-deleting install records creates a mess someone else has to unpick.
 - Do not ask them to share a token, password, or the contents of any file under `~/.claude`.
+- Do not tell them to wrap or edit `hooks.json` / `plugin.json`. A `Hook load failed` / `expected record` error through 0.24.0 is a plugin bug; updating to 0.24.1+ is the fix.
