@@ -285,7 +285,33 @@ test('no skill frontmatter contains XML-like tags (org Skills upload rejects the
       if (tags) offenders.push(`${dir}: ${tags.join(' ')}`);
     }
   }
+  const orgSkillsDir = join(repoRoot, 'org-skills');
+  if (existsSync(orgSkillsDir)) {
+    for (const dir of readdirSync(orgSkillsDir).filter((d) => statSync(join(orgSkillsDir, d)).isDirectory())) {
+      const md = readFileSync(join(orgSkillsDir, dir, 'SKILL.md'), 'utf8');
+      const lines = md.split(/\r?\n/);
+      let fence = 0;
+      for (const line of lines) {
+        if (line.trim() === '---') { fence++; if (fence >= 2) break; continue; }
+        if (fence !== 1) continue;
+        const tags = line.match(/<[A-Za-z/][^>]*>/g);
+        if (tags) offenders.push(`org-skills/${dir}: ${tags.join(' ')}`);
+      }
+    }
+  }
   assert.deepEqual(offenders, [], `XML-like tags in frontmatter — use [brackets]:\n${offenders.join('\n')}`);
+});
+
+test('org-skills/mc is a Chat/Cowork pack, not a second plugin skill dir', () => {
+  const orgMc = join(repoRoot, 'org-skills', 'mc', 'SKILL.md');
+  assert.ok(existsSync(orgMc), 'org-skills/mc/SKILL.md missing — Chat/Cowork /mc zip source');
+  const fields = parseFrontmatter(readFileSync(orgMc, 'utf8'));
+  assert.equal(fields.name, 'mc', 'org skill name must match the folder (uploader uses the folder)');
+  assert.ok(fields.description && fields.description.length > 0);
+  assert.ok(
+    !existsSync(join(pluginRoot, 'org-skills')),
+    'do not nest org-skills inside the plugin — that dual-ships into Claude Code',
+  );
 });
 
 test('no skill file carries a literal secret', () => {
