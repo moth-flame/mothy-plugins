@@ -5,7 +5,7 @@ description: Surface every open decision that is the user's to make as clickable
 
 # mc — ask for a decision the way it can actually be answered
 
-This is the **Chat / Cowork** copy. Claude Code gets the same protocol from the Mothy plugin (`/mc`). Do not paste this into the plugin; the plugin copy also talks about a SessionStart hook that only exists there.
+Standby pack only. The live `/mc` in Chat, Cowork, and Code is the **Mothy plugin** skill. Do not org-upload this while the plugin is installed — that is a second `/mc` in the slash menu. Use this zip only if Chat/Cowork must have `/mc` with the plugin **disabled** on those surfaces.
 
 ## Why this exists
 

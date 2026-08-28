@@ -1,16 +1,22 @@
-# Organization skills (Chat / Cowork)
+# Organization skills
 
-Claude Code loads these from the **mothy plugin**. Chat and Cowork do **not**.
-Upload a zip from this directory via claude.ai → Organization settings → Skills.
+The **Mothy plugin** (`mothy@mothy-marketplace`) already reaches **Chat,
+Cowork, and Claude Code**. Uploading a zip of a skill the plugin already
+ships (`mc`, `deck`, `video`, …) produces **two `/name` entries** — one
+labelled as an organization skill, one labelled "Mothy plugin".
 
-Each folder is one skill (`name` must match the folder name). Zip the **folder**:
+**Do not org-upload a plugin skill.** Delete the org copy if it is already
+there. One catalog: the plugin.
+
+This directory is only for a skill that must exist in Chat/Cowork **and must
+not** exist in Claude Code. Zip the **folder** (`name` = folder name):
 
 ```
 cd org-skills
-zip -r ~/Desktop/mc.zip mc
+zip -r ~/Desktop/<name>.zip <name>
 ```
 
-The zip root must be `mc/SKILL.md`, not a bare `SKILL.md`.
+The zip root must be `<name>/SKILL.md`, not a bare `SKILL.md`.
 
-Do not add these folders under `plugins/mothy/skills/` — that would ship them
-twice inside the plugin.
+Do not add these folders under `plugins/mothy/skills/` — that would ship
+them twice inside the plugin, which is a different duplicate.
