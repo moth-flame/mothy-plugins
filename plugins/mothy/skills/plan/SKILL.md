@@ -512,3 +512,12 @@ state (§0.3) before doing anything else — the run is detached and resumable.
 - **Naming a test command the repo doesn't have**, so every downstream step is unrunnable.
 - **Writing the plan into a directory convention the repo doesn't use**, or refusing to plan because `CLAUDE.md` / `AGENTS.md` is missing.
 - Estimating in days/hours/weeks instead of complexity points.
+## Operate from the Product First Principles
+
+When planning product work, read `${CLAUDE_PLUGIN_ROOT}/docs/product-first-principles.md`
+and let it bias the plan: think big, start small (smallest independently useful units
+first); make reversible calls in the plan without ceremony, flag 1-way doors explicitly;
+don't shop without a price tag (carry relative Fibonacci complexity per work unit, never
+time estimates); measure what we value (the plan includes instrumenting the PRD's
+self-measuring North Star metric, not just features). If the input is a PRD, its MoSCoW
+job stories are the requirements contract — decompose them, don't reinvent them.

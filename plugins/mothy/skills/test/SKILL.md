@@ -451,3 +451,9 @@ finding of the same severity as a test that cannot fail.
 - **Generating the expected with the same helper the impl uses** (T-07) — they can't disagree.
 - **Re-running a test area already written + audited after a disconnect.** Check the test files + state file first; resume only the undone areas.
 ```
+## Operate from the Product First Principles
+
+Read `${CLAUDE_PLUGIN_ROOT}/docs/product-first-principles.md`. Testing serves "measure what
+we value": tests assert the value the PRD promised, not just code paths. For AI behavior,
+route to the evals skill — graded eval sets with thresholds are the test suite there, and
+the same red-green discipline applies (a new AI behavior gets a failing eval first).

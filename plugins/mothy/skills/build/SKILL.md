@@ -1055,3 +1055,12 @@ return { units: indepResults.flat(), regression, iteration, verdicts: unit_verdi
 - **Reading untrusted content (email bodies, ticket text, scraped pages) inside a builder agent.** Quarantined reader → structured JSON → an actor agent that never sees the raw content.
 - **Re-running a unit that already committed after a disconnect.** Check `git log` since the base commit first (§0.3/§10). Git is the journal — trust it.
 - **Keeping build progress only in the conversation.** A cold restart loses it; the commits (and the optional state file) are the durable record.
+## Operate from the Product First Principles
+
+When building product work, read `${CLAUDE_PLUGIN_ROOT}/docs/product-first-principles.md`
+and let it bias the build: don't take shortcuts (no empty-calorie work, no debt dumped on
+future us); simple scales, fancy fails; ship to learn — bullets before cannonballs; measure
+what we value (wire up the PRD's North Star instrumentation as part of the build, and run
+the eval set as part of definition of done for AI behavior — see the evals skill). If this
+build implements a PRD, update the project's R&D Project Registry entry (or tell the user
+to) with the repo link, live-app link, and a one-line summary of what landed.

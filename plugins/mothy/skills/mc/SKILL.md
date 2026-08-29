@@ -82,3 +82,11 @@ This does not relax any gate, and it does not make you more likely to stop. It
 changes only *how* a stop is surfaced. Kill switch `MOTHY_MC_ALWAYS_ON`
 (off-values `0|off|false|no`) disables the SessionStart inject; the skill
 still works when invoked.
+## Operate from the Product First Principles
+
+When the decisions being asked concern product work, read
+`${CLAUDE_PLUGIN_ROOT}/docs/product-first-principles.md` and apply the doors test:
+reversible (2-way door) decisions the stated intent already covers should NOT become
+widget questions — decide, note the rationale, keep moving. Reserve widgets for 1-way
+doors and genuine taste/appetite calls (naming, complexity budget, customer exposure).
+Frame options with real trade-offs, recommendation first — "be clear, not clever."

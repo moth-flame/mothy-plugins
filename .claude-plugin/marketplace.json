@@ -10,7 +10,7 @@
       "name": "mothy",
       "source": "./plugins/mothy",
       "description": "Moth+Flame team agent: customer briefs, capability decks, intel, Google Workspace edits, onboarding.",
-      "version": "0.24.2"
+      "version": "0.26.0"
     }
   ]
 }

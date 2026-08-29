@@ -1,7 +1,7 @@
 {
   "name": "mothy",
-  "version": "0.24.2",
-  "description": "Moth+Flame team agent \u2014 briefs, decks, intel search, Google Workspace in-place edits, onboarding. Sign in with your @mothandflamevr.com Google account.",
+  "version": "0.26.0",
+  "description": "Moth+Flame team agent \u2014 briefs, decks, intel search, Google Workspace in-place edits, onboarding, and the AI-native product process (idea-intake, pr-faq, prd, evals, process-navigator). Sign in with your @mothandflamevr.com Google account.",
   "author": {
     "name": "Moth+Flame",
     "email": "rich@mothandflamevr.com"
@@ -17,7 +17,13 @@
     "video",
     "article",
     "demo",
-    "compaction"
+    "compaction",
+    "pr-faq",
+    "prd",
+    "idea-intake",
+    "process-navigator",
+    "product-process",
+    "evals"
   ],
   "hooks": {
     "PreCompact": [
@@ -77,6 +83,12 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/check-plugin-freshness.mjs\" 2>/dev/null || true",
             "timeout": 5,
             "statusMessage": "Checking plugin freshness..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/inject-rd-nudge.sh\" 2>/dev/null || true",
+            "timeout": 5,
+            "statusMessage": "Loading R&D process nudge..."
           }
         ]
       }

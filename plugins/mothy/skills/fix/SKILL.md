@@ -1094,3 +1094,9 @@ return { fixed: true, repro, rootCause, fix, verdict, regression, iteration, rIt
 - **Re-fixing a bug already fixed after a disconnect.** Check `git log` since the base commit first (§0.3/§10) — the fix commit is the journal.
 - **Keeping the investigation only in the conversation.** A cold restart loses it; the commit (and the optional state file) is the durable record.
 - **Routing a new-feature request here.** No reported wrong behavior to reproduce → it's /build or /plan, not /fix.
+## Operate from the Product First Principles
+
+Read `${CLAUDE_PLUGIN_ROOT}/docs/product-first-principles.md`. Extreme Ownership governs
+fixes: a mistake made more than once is a decision — after the smallest fix lands, propose
+the systematic prevention (a test, an eval case, a guardrail), don't rely on good
+intentions. For AI-behavior bugs, the failing reproduction is an eval case (evals skill).
