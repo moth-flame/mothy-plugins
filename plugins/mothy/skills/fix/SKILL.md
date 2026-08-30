@@ -322,6 +322,7 @@ The user says one of:
 
 NOT for:
 - **Building a new feature** — that is /build. The boundary: /build adds behavior that *should* exist and doesn't yet; /fix removes behavior that *shouldn't* exist (wrong output, crash, regression). If there is no "reported wrong behavior to reproduce," it is not a fix — route to /build or /plan.
+- **A defect that is an ABSENCE rather than a wrong value** — a missing check, a missing guard, a validation that was never written. There is a real reported incident, so it *looks* like a fix, but the correction is additive: it needs a capability that does not exist yet. §0.1 is the binding test; it routes these to /build.
 - A trivial one-line typo the user pointed at directly — that is an inline edit, don't spawn a squad.
 - Pushing to a remote — /fix STOPS at the local commit (§8).
 
@@ -332,6 +333,38 @@ thread as an orchestrator — brief sub-agents, read their reports, decide —
 rather than burning its context on greps, reads, and edits.
 
 ## Protocol
+
+### 0.1 Routing gate — is this a fix at all? (BINDING, runs before §0)
+
+Answer before classifying a tier. This gate is **binding, not advisory** — it was
+advisory once and a real run talked itself past it.
+
+**Ask: does the smallest correct correction require a capability that does not exist
+yet — a new module, a new parser, a new abstraction, a new checker?**
+
+- **No** — the correction changes an existing value, branch, comparison, or guard.
+  It is a **fix**. Continue to §0.
+- **Yes** — it is a **/build**, however loudly a production incident is reporting it.
+  STOP and route. Say which capability is missing and why the change is additive.
+- **Unsure** — treat as /build. A fix mis-run as a build wastes a planning pass; a
+  build mis-run as a fix runs the whole loop under a minimality rule that forbids the
+  correct design (below).
+
+**A reported incident does NOT settle this.** An absent check produces a real,
+reproducible production break, so the symptom looks exactly like a fix's. What decides
+is the SHAPE OF THE CORRECTION, not the shape of the symptom.
+
+**Why this is binding — measured.** A push script landed two consumers on the main
+branch whose dependencies existed nowhere, so a fresh clone could not boot and CI was
+red all day. Genuine incident; routed to /fix. But the script had no wrong logic — it
+did exactly what it was written to do, and the defect was the **absence** of a link
+check. The correct correction needed a new module doing real parsing. §4's minimality
+rule forbids new abstractions, so the fixer inlined a parser into the shell script
+instead, and by round 3 had a comment-stripper and a template-literal state machine in
+bash gating every push — with a crash path that killed the script with zero output,
+unrelated files made un-pushable, and a leg that would not have caught the original
+incident line. Escalated after 3 rounds with nothing committed. The routing text
+existed and was read; it lost to "but there was a real incident."
 
 ### 0. Classify the bug (heuristic gate — biases SMALL)
 
@@ -393,6 +426,18 @@ Each diagnosis agent returns `DIAGNOSIS_SCHEMA`:
 - `blast_radius` — the smallest set of files that must change, and the set that must NOT (siblings that share the code path and could regress).
 - `confidence` + any alternative hypotheses not yet ruled out.
 
+**Prior-art check — MANDATORY, before any fix is dispatched.** Ask: *does something
+in this repo already do this?* Search for an existing implementation of the
+correction, not just of the bug — a guard, a validator, a parser, a CI test, a shared
+module that already solves the same problem for a different caller. If one exists, the
+fix is to **reuse or invoke it** — never to write a second implementation. A second
+copy drifts from the first while both keep returning plausible answers.
+
+Cost of skipping it, measured: three fix rounds were spent building a bad import
+parser in bash while the repo's own test suite already carried a working link guard —
+and that existing guard is precisely what caught the incident in CI. The correct fix
+was to run the checker that already worked against a different tree; nobody looked.
+
 **Synthesize one root cause** from the scout reports before dispatching the fix.
 If scouts disagree, the divergence IS signal — reconcile (often two scouts found
 two real bugs, or one found the symptom site and one found the source). The
@@ -437,6 +482,15 @@ Inverted red-green, plus a revert-check the fix specifically demands:
 2. **Fix (green = bug gone)** — the fix agent applies the **smallest change that addresses the root cause** (minimal blast radius, below). The reproduction now passes.
 3. **Revert-check (the fix is load-bearing)** — revert the fix, run the reproduction, confirm it FAILS AGAIN with the original symptom; re-apply, confirm it PASSES. This proves the fix — not some incidental change — is what closed the bug, and that the test is not over-fitted to pass without the fix (F-05). Document both halves in the write-up.
 4. **Same commit:** reproduction test + fix + the write-up land together. Never split across commits.
+
+**Minimality has ONE exception, and missing it is how this rule produces the wrong
+design.** If the smallest CORRECT correction genuinely requires a new module or
+abstraction, minimality does not license inlining it badly somewhere it does not
+belong. That is the §0.1 signal arriving late: **stop and re-route to /build** rather
+than compressing a new capability into whatever file happens to be open. "No new
+abstractions" means *do not opportunistically refactor*; it never means *implement a
+parser inside a shell script to avoid adding a file*. When the two rules collide,
+correctness of design wins and the run re-routes.
 
 **Minimal blast radius (the heart of /fix).** The fix is the SMALLEST change
 that addresses the root cause. While fixing:
@@ -486,7 +540,7 @@ need the test to do that — it needs the F-01..F-05 lens on the change itself.
 **Failure handling:**
 - All `pass` / `n/a` at severity ≥ high → fix advances to commit.
 - Any `fail` at severity ≥ high → re-run the fix agent with findings + diff + rubric (NOT the reproduction test). Fix agent edits impl. Re-run reproduction + revert-check + verifier. **Bounded at 3 rework rounds.**
-- After 3 rounds with unresolved high+ findings → **ESCALATE to the user. DO NOT commit.** A fix that can't converge in 3 rounds usually means the root cause was mis-identified — loop back to diagnosis, do not pile guards on top of a wrong diagnosis.
+- After 3 rounds with unresolved high+ findings → **ESCALATE to the user. DO NOT commit.** Do not pile guards. Classify the escalation first (§6): a moving root cause → loop back to diagnosis; a root cause that held all 3 rounds → the design is wrong, re-route to /build.
 
 ### 4.6. Verifier rubric (10 build classes + 5 fix classes)
 
@@ -560,9 +614,26 @@ until (
 ```
 
 On `iteration === 3` with unresolved findings OR a still-red regression: surface
-an escalation summary to the user. DO NOT commit. **A fix that can't pass
-regression in 3 rounds is the wrong fix — the root cause was probably
-mis-identified; loop back to diagnosis, don't pile guards.**
+an escalation summary to the user. DO NOT commit. Do not pile guards.
+
+**Classify the escalation before recommending a recovery — there are TWO, and they
+need opposite next steps.** The default advice used to be "the root cause was probably
+mis-identified; loop back to diagnosis," which is only one of them, and sending the
+other one back to diagnosis re-derives the same correct diagnosis and fails the same
+way again.
+
+| Kind | Signal | Recovery |
+|---|---|---|
+| **`root_cause_wrong`** | Findings say the diff edits a path the symptom does not flow through (F-02), or sits downstream of the real source (F-01). The reproduction passes only incidentally. | Loop back to §2 diagnosis. More scouts, different layers. |
+| **`approach_wrong`** | The root cause is agreed and unchanged across all 3 rounds; findings are about the IMPLEMENTATION — false positives, silent misses, crashes, an escalating parser/state machine, each round fixing one class and opening another. | Do **NOT** re-diagnose. Re-route to **/build**: the design is the problem, not the location. Report the root cause as SETTLED and hand over the measured list of what the failed approach got wrong — that list is a specification. |
+
+`approach_wrong` is the more common shape when §0.1 was answered incorrectly, and the
+two are distinguishable at a glance: if `root_cause_file:line` did not move across the
+three rounds, it is `approach_wrong`.
+
+**The escalation is not a failure to report apologetically.** A verifier that refuses
+three times has prevented a bad change from landing and produced a measured spec of
+what not to build. Say what it saved, and hand the findings forward.
 
 **Bug-class grep pass (regression-side):** ALSO grep-scan the fix diff for these
 and add hits as `BugClassHuntSchema` findings before the stop check:
@@ -945,8 +1016,18 @@ while (iteration < 3) {
 }
 
 if (iteration === 3 && verdict.overall_verdict !== 'pass') {
-  // ESCALATE — root cause probably mis-identified. Loop to diagnosis, do NOT pile guards. Do NOT commit.
-  return { escalated: true, fix, verdict, repro, rootCause }
+  // ESCALATE — do NOT pile guards, do NOT commit. Classify WHICH escalation (§6):
+  // the root cause held across all 3 rounds => the DESIGN is wrong, not the location,
+  // so re-route to /build. Sending that shape back to diagnosis re-derives the same
+  // correct diagnosis and fails identically.
+  const rootCauseHeld = rootCauseStableAcrossRounds(rootCause)  // file:line never moved
+  return {
+    escalated: true,
+    escalation_kind: rootCauseHeld ? 'approach_wrong' : 'root_cause_wrong',
+    recovery: rootCauseHeld ? 'route to /build — root cause is SETTLED, hand the findings over as a spec'
+                            : 'loop back to §2 diagnosis with different scouts',
+    fix, verdict, repro, rootCause
+  }
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -1051,13 +1132,16 @@ return { fixed: true, repro, rootCause, fix, verdict, regression, iteration, rIt
 
 ## Rules
 
+- **Route before you classify (§0.1, BINDING).** If the smallest correct correction needs a capability that does not exist yet — a new module, parser, checker, abstraction — it is a /build, no matter how real the incident reporting it. Unsure ⇒ /build. A reported production break does not make an additive change a fix.
+- **Prior-art check before dispatching the fix (§2).** Does this repo already implement the correction? Reuse or invoke it; never write a second implementation.
+- **Classify the escalation (§6).** `root_cause_wrong` → re-diagnose. `approach_wrong` (root cause held all 3 rounds, findings are about the implementation) → re-route to /build and hand the findings over as a spec. Do not send an approach failure back to diagnosis.
 - **Reproduce first, always.** No code change before the bug is a failing test that demonstrates the reported wrong behavior (§1). Can't reproduce → that's a finding, investigate or ask — never guess-fix.
 - **Root cause over symptom.** Diagnosis distinguishes the earliest point the value went wrong from where it was observed. The fix targets the root cause. Masking the symptom is forbidden (F-01).
 - **Minimal blast radius.** Smallest change at the root cause. No refactors, renames, reformats, new abstractions, opportunistic cleanup, or scope creep. Touch the fewest files. A second bug is a second /fix.
 - **Revert-check non-negotiable** for standard/risky. Revert the fix → reproduction fails again → re-apply → passes. Proves the fix is load-bearing and the test isn't over-fitted.
 - **Adversarial verifier non-negotiable** for standard/risky. A different agent from reproduce+fix. **Sees only {diff, rubric, types}. NEVER the reproduction test, test output, author identity, prior-agent reasoning, or regression output** — that isolation is why the verdict carries signal (§4.5).
 - **Conformance review before the commit (§6.5).** One more agent, labeled `conformance:` and never `verify:`, reads the original bug report alongside the fix and asks the question the isolated verifier structurally cannot: is the reported bug actually resolved? Separate from the adversarial verifier, and not a replacement for it. No veto — you own the commit decision — but an unresolved `critical` finding blocks it.
-- **Verifier veto.** Unresolved high+ findings after 3 rework rounds → escalate to the user. Do NOT commit through. Do NOT pile guards on a mis-identified root cause — loop back to diagnosis.
+- **Verifier veto.** Unresolved high+ findings after 3 rework rounds → escalate to the user. Do NOT commit through. Do NOT pile guards. Classify first (§6): `root_cause_wrong` → re-diagnose; `approach_wrong` (root cause held all 3 rounds) → re-route to /build with the findings as a spec.
 - **Full regression every time, single new failure blocks.** Use the command detected in §0.2, never a hardcoded one. Separate new failures from the pre-existing floor.
 - **Never hardcode a test command** (§0.2). If it can't be detected, ask.
 - **Browser/E2E is conditional.** Only if the repo has that setup; otherwise skip it and say so. A missing browser gate is never a failure.
@@ -1094,6 +1178,10 @@ return { fixed: true, repro, rootCause, fix, verdict, regression, iteration, rIt
 - **Re-fixing a bug already fixed after a disconnect.** Check `git log` since the base commit first (§0.3/§10) — the fix commit is the journal.
 - **Keeping the investigation only in the conversation.** A cold restart loses it; the commit (and the optional state file) is the durable record.
 - **Routing a new-feature request here.** No reported wrong behavior to reproduce → it's /build or /plan, not /fix.
+- **Treating a real incident as proof it is a fix (§0.1).** An absent check breaks production just as loudly as a wrong value. The shape of the CORRECTION decides the route, not the shape of the symptom.
+- **Inlining a new capability to satisfy minimality.** Writing a parser into a shell script, or a state machine into a config file, to avoid adding a module. That is the §0.1 signal arriving late — re-route to /build.
+- **Writing a second implementation of a check the repo already has (§2).** Two copies drift while both keep returning plausible answers. Reuse or invoke the existing one.
+- **Sending an `approach_wrong` escalation back to diagnosis.** If the root cause never moved across 3 rounds, re-diagnosing re-derives the same correct answer and fails identically.
 ## Operate from the Product First Principles
 
 Read `${CLAUDE_PLUGIN_ROOT}/docs/product-first-principles.md`. Extreme Ownership governs
