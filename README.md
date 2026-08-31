@@ -1,6 +1,6 @@
 # Mothy Marketplace
 
-Private Claude Code / Cowork plugin marketplace for **Moth+Flame**.
+Moth+Flame's Claude Code / Cowork plugin marketplace (public GitHub repo — no sign-in needed to add it).
 
 This marketplace ships a single plugin — **`mothy`** — bundling the Moth+Flame
 team agent's **skills + slash commands**: customer briefs, capability decks,
@@ -72,8 +72,9 @@ Turn it off with `MOTHY_ARM_PUSH_GATE=0` (default on).
 
 ## Access
 
-Private, **org-only** marketplace for Moth+Flame. Mothy's data + actions are
-gated on a valid `@mothandflamevr.com` identity (your `/connect` sign-in or an
+**Org-only** marketplace for Moth+Flame (the GitHub repo itself is public — no
+sign-in needed to add it). Mothy's data + actions are gated separately, on a
+valid `@mothandflamevr.com` identity (your `/connect` sign-in or an
 admin-minted token). Not in the registry yet? Message **Rich or Chris**.
 
 ## What's inside

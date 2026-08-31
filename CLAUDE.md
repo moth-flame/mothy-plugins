@@ -7,8 +7,10 @@ duplicated here.**
 
 ## What this repo is
 
-`mothy-plugins` (`github.com/moth-flame/mothy-plugins`) is the **private
-Claude Code / Cowork plugin marketplace for Moth+Flame.** It ships a single
+`mothy-plugins` (`github.com/moth-flame/mothy-plugins`) is **Moth+Flame's
+Claude Code / Cowork plugin marketplace.** The GitHub repo is public (Rich's
+ruling 2026-08-30, secret-scanned clean) — no `gh auth` / org membership
+needed to add it. It ships a single
 plugin — **`mothy`** — that bundles the team agent's **skills + slash commands**
 (customer briefs, capability decks, in-place Google Workspace edits, demo
 videos, KB articles, onboarding).

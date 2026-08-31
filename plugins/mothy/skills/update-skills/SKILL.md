@@ -84,17 +84,17 @@ They almost certainly ran `claude plugin update` **without** the marketplace lin
 claude plugin marketplace add moth-flame/mothy-plugins
 ```
 
-**This one needs them to be signed in to GitHub on that machine**, because the Moth+Flame plugin repository is private. If the command hangs for a minute or two and then gives up with no useful message, that is what happened — it was waiting for a sign-in that never came.
+The `mothy-plugins` repository is public, so this should just work — no GitHub sign-in needed.
 
-Sort the sign-in first:
+**If it fails with an authentication or permission error**, the repo may have been made private again — sort GitHub sign-in first:
 
 ```
 gh auth login
 ```
 
-Choose GitHub.com → HTTPS → yes to authenticate git → Login with a web browser. They copy the code shown, press Enter, and approve in the browser that opens. They must use their **@mothandflamevr.com** GitHub account, and it must be a member of the `moth-flame` organization — if they are not, no amount of terminal will help and someone needs to add them.
+Choose GitHub.com → HTTPS → yes to authenticate git → Login with a web browser. They copy the code shown, press Enter, and approve in the browser that opens.
 
-If `gh` is also `command not found`, they do not have the GitHub CLI. On a Mac: `brew install gh`. On Windows, Git Bash usually ships with a credential helper and a plain browser sign-in prompt will appear on first use instead.
+If `gh` is also `command not found`, they do not have the GitHub CLI. On a Mac: `brew install gh`. On Windows, Git Bash usually ships with a credential helper and a plain browser sign-in prompt will appear on first use instead. Re-run the `marketplace add` line after signing in.
 
 Once the marketplace is added:
 

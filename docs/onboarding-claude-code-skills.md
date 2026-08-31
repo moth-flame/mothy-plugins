@@ -33,20 +33,20 @@ That is the whole update procedure.
 
 ## First time only
 
-You also need a one-time GitHub sign-in, because the plugin repository is private:
-
-```
-gh auth login
-```
-
-Choose **GitHub.com → HTTPS → yes to authenticate git → Login with a web browser**, and sign in with your **@mothandflamevr.com** account. Then:
-
 ```
 claude plugin marketplace add moth-flame/mothy-plugins
 claude plugin install mothy@mothy-marketplace
 ```
 
-Quit and reopen Claude. If `gh` is not found on a Mac, install it with `brew install gh` first.
+Quit and reopen Claude. The `mothy-plugins` repository is public, so no GitHub sign-in is needed.
+
+**If `marketplace add` fails with an authentication or permission error**, the repo may have been made private again:
+
+```
+gh auth login
+```
+
+Choose **GitHub.com → HTTPS → yes to authenticate git → Login with a web browser**, and sign in with your **@mothandflamevr.com** account. If `gh` is not found on a Mac, install it with `brew install gh` first. Then re-run the two lines above.
 
 ---
 

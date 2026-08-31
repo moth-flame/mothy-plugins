@@ -134,7 +134,8 @@ broken", "make sure it actually works") is enough.
 
 ## Notes
 
-- Private / org-only for Moth+Flame. Data access is gated on your
-  `@mothandflamevr.com` identity (the token from `/connect`).
+- Org-only for Moth+Flame (GitHub repo is public; data access is gated
+  separately on your `@mothandflamevr.com` identity — the token from
+  `/connect`).
 - Don't surface "Mothy MCP" in customer-facing output — use it silently and
   present results as plain findings.
