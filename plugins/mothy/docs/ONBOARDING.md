@@ -25,12 +25,15 @@ data.
 
 ## 1. Install the Mothy plugin
 
-In Claude Code:
+In a terminal (Applications → Utilities → Terminal on a Mac — these are terminal
+commands, not slash commands typed into the app):
 
 ```
-/plugin marketplace add moth-flame/mothy-plugins
-/plugin install mothy@mothy-marketplace
+claude plugin marketplace add moth-flame/mothy-plugins
+claude plugin install mothy@mothy-marketplace
 ```
+
+Then quit Claude completely and reopen it so the new skills load.
 
 This installs **skills + slash commands only** — no connector yet. Then connect
 Mothy (one-time). The easiest path is to just ask:

@@ -28,6 +28,8 @@ Corollary you will need: the **Plugins panel in Settings shows the catalog versi
 
 **Give one command. Wait. Read the output. Then decide.** Do not paste a wall of steps — the whole point of them asking you instead of reading a document is that they do not want to interpret a decision tree.
 
+**Every command in this coach is a TERMINAL command — never a `/plugin …` slash command.** Most teammates use the Claude desktop app, where `/plugin` does not exist; handing them a slash spelling costs a round trip just to learn that. Go straight to the Terminal path even when they say "Claude Code Desktop". The terminal spelling is never wrong: someone who does run Claude in a terminal session can use `claude plugin …` there too.
+
 Tell them where the terminal is if they seem unsure: Applications → Utilities → Terminal on a Mac, or Git Bash on Windows. They paste the line, press Enter, then copy everything that comes back and paste it to you.
 
 ## Step 1 — always start here
@@ -44,6 +46,7 @@ Then branch on what comes back:
 - **`failed to load` with `expected record` / `"path": ["hooks"]`** → known plugin bug through 0.24.0, not their install. Same Step 2; they need **0.24.1 or later**. Do not tell them to edit JSON.
 - **`command not found: claude`** → they have Claude Desktop but not the command-line tool. Stop and say so plainly: this update cannot be done from the Desktop app's buttons today, and they need either the Claude Code CLI installed or someone with a terminal to do it for them. Do not send them into the Settings panel to hunt for an Update button — it is greyed out or lies, and that is a known bug.
 - **A list with no `mothy` line** → they have never installed it. Go to Step 3.
+- **They say `/plugin` (or any slash command) "isn't recognized"** → they typed a slash command into the app's chat box. Nothing in this coach is a slash command. Point them at the Terminal (Applications → Utilities → Terminal on a Mac) and re-send the `claude plugin list` line to paste there.
 
 ## Step 2 — updating an existing install (the common case)
 
@@ -121,6 +124,7 @@ Two things worth saying out loud when they hit trouble, because people assume th
 
 ## What NOT to tell them
 
+- Do not give `/plugin …` slash-command spellings — not even as a first attempt. The desktop app has no `/plugin`, and the person cannot tell a slash command from a terminal one. Every command here starts `claude plugin …` and is pasted into the Terminal.
 - Do not send them to Settings → Plugins to click Update. The button is greyed out or reports "On latest version" against a stale catalog.
 - Do not tell them to run `/status` — it does not exist in Claude Desktop.
 - Do not suggest reinstalling the app, clearing caches by hand, or deleting folders under `~/.claude`. The two commands in Step 2 are the fix; hand-deleting install records creates a mess someone else has to unpick.

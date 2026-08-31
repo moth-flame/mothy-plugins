@@ -7,9 +7,11 @@ Mothy MCP tools, which you connect once (see below).
 
 ## Install (skills + commands)
 
+In a terminal (not the app's chat box):
+
 ```
-/plugin marketplace add moth-flame/mothy-plugins
-/plugin install mothy@mothy-marketplace
+claude plugin marketplace add moth-flame/mothy-plugins
+claude plugin install mothy@mothy-marketplace
 ```
 
 This installs **skills + commands only — no connector.**

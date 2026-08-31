@@ -16,9 +16,13 @@ videos, KB articles, onboarding).
 Install:
 
 ```
-/plugin marketplace add moth-flame/mothy-plugins
-/plugin install mothy@mothy-marketplace
+claude plugin marketplace add moth-flame/mothy-plugins
+claude plugin install mothy@mothy-marketplace
 ```
+
+(Terminal spellings on purpose — end-user docs must never show `/plugin …`
+slash commands; most teammates are in the desktop app where `/plugin` does not
+exist. Ruling 2026-08-31.)
 
 **Skills + commands only — no bundled MCP connector** (intentional). Mothy is
 published as a separate **org connector**; bundling one here would create a dead
@@ -192,7 +196,7 @@ invoked even if the hook is off.
 - **Strict validate (if `claude` CLI present):** `claude plugin validate
   ./plugins/mothy --strict`.
 - **Publish:** push to `main` on GitHub. There is no build/deploy step — the
-  marketplace is just this repo; users `/plugin marketplace add` it and install.
+  marketplace is just this repo; users `claude plugin marketplace add` it and install.
   After a plugin change, bump `plugins/mothy/.claude-plugin/plugin.json`
   `version`.
 
