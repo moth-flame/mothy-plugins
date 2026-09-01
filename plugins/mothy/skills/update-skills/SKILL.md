@@ -1,6 +1,6 @@
 ---
 name: update-skills
-description: Coach a Moth+Flame teammate through installing or updating the Mothy plugin in Claude Code Desktop, one pasted terminal output at a time. Use when someone says "how do I update my skills", "my skills are out of date", "/article isn't showing up", "I don't see the Mothy skills in Claude Code", "update the Mothy plugin", "the plugin says it's the latest version but it isn't", or pastes terminal output from a `claude plugin` command that failed or did nothing. Give ONE command at a time and read their pasted output before giving the next. Assume the person is not technical and has never used a terminal. NOT for setting up the Mothy MCP connector — teammates get that through the organization connector, not through a skill — and NOT for authoring or publishing skills.
+description: Coach a Moth+Flame teammate through installing or updating the Mothy plugin in Claude Code Desktop, one pasted terminal output at a time. Use when someone says "how do I update my skills", "my skills are out of date", "/article isn't showing up", "I don't see the Mothy skills in Claude Code", "update the Mothy plugin", "the plugin says it's the latest version but it isn't", "the plugin shows as installed but I don't see the skills", "update says already on latest but the skills are missing", or pastes terminal output from a `claude plugin` command that failed or did nothing. Give ONE command at a time and read their pasted output before giving the next. Assume the person is not technical and has never used a terminal. NOT for setting up the Mothy MCP connector — teammates get that through the organization connector, not through a skill — and NOT for authoring or publishing skills.
 ---
 
 # update-skills — get the Mothy skills current in Claude Code Desktop
@@ -40,9 +40,16 @@ Ask them to paste this and send you the result:
 claude plugin list
 ```
 
+**If their complaint is "the skills aren't showing" (rather than "my skills are out of date"), ask for this in the same round trip** — it separates stale-version from dangling-install from never-installed in one command:
+
+```
+ls ~/.claude/plugins/cache/mothy-marketplace/mothy/
+```
+
 Then branch on what comes back:
 
 - **A list including `mothy` with Status enabled** → they have it. Go to Step 2 to update it.
+- **`mothy` listed as installed and enabled, but the `ls` says `No such file or directory`** → **dangling install record**: the registry entry survived but the files are gone. Go to Step 2b — `claude plugin update` cannot fix this.
 - **`failed to load` with `expected record` / `"path": ["hooks"]`** → known plugin bug through 0.24.0, not their install. Same Step 2; they need **0.24.1 or later**. Do not tell them to edit JSON.
 - **`command not found: claude`** → they have Claude Desktop but not the command-line tool. Stop and say so plainly: this update cannot be done from the Desktop app's buttons today, and they need either the Claude Code CLI installed or someone with a terminal to do it for them. Do not send them into the Settings panel to hunt for an Update button — it is greyed out or lies, and that is a known bug.
 - **A list with no `mothy` line** → they have never installed it. Go to Step 3.
@@ -77,6 +84,42 @@ claude plugin update mothy@mothy-marketplace --scope managed
 ### If it says it is already on the latest version, but they know it isn't
 
 They almost certainly ran `claude plugin update` **without** the marketplace line first. Go back and run both, in order. This is the single most common failure and it is silent.
+
+**If they DID run both in order and it still says already on latest while the skills are missing**, do not keep re-running update — run the Step 1 `ls`. A dangling install (Step 2b) reports "already on latest" forever, because `update` compares the recorded version against the catalog and never rewrites files.
+
+## Step 2b — installed but the skills don't show up (and update says already on latest)
+
+The shape: "the plugin shows as installed but I don't see the skills", or "update says already on latest but the skills are missing". `claude plugin list` shows `mothy` installed and enabled, `claude plugin update` reports latest — and nothing loads.
+
+The decisive diagnostic (same as Step 1's):
+
+```
+ls ~/.claude/plugins/cache/mothy-marketplace/mothy/
+```
+
+`No such file or directory` while `claude plugin list` says installed = a **dangling install record**: the registry entry survived, the cached files are gone. This can happen after a failed or interrupted install, or a cache cleanup. `claude plugin update` cannot repair it — update compares the recorded version number against the catalog and never rewrites files, so it says "already on latest" about files that do not exist.
+
+The fix, one command at a time:
+
+```
+claude plugin marketplace update mothy-marketplace
+```
+
+Then — **INSTALL, not update**, because install rewrites the files where update short-circuits on the matching version number:
+
+```
+claude plugin install mothy@mothy-marketplace
+```
+
+If install refuses with "already installed", have the CLI clear its own record and reinstall:
+
+```
+claude plugin uninstall mothy@mothy-marketplace && claude plugin install mothy@mothy-marketplace
+```
+
+This CLI uninstall+install is the sanctioned repair for the dangling case — never hand-delete cache folders or edit `installed_plugins.json`. (If uninstall hits the managed-scope error, remember the Step 2 caveat: `uninstall --scope` accepts only `user`, `project`, `local` — the error's `--scope managed` advice names a flag that command does not take.)
+
+Then tell them to **quit Claude completely and reopen it**, and confirm with the Step 4 `ls` check.
 
 ## Step 3 — first-time install
 
@@ -127,6 +170,6 @@ Two things worth saying out loud when they hit trouble, because people assume th
 - Do not give `/plugin …` slash-command spellings — not even as a first attempt. The desktop app has no `/plugin`, and the person cannot tell a slash command from a terminal one. Every command here starts `claude plugin …` and is pasted into the Terminal.
 - Do not send them to Settings → Plugins to click Update. The button is greyed out or reports "On latest version" against a stale catalog.
 - Do not tell them to run `/status` — it does not exist in Claude Desktop.
-- Do not suggest reinstalling the app, clearing caches by hand, or deleting folders under `~/.claude`. The two commands in Step 2 are the fix; hand-deleting install records creates a mess someone else has to unpick.
+- Do not suggest reinstalling the app, hand-deleting folders under `~/.claude`, or editing `installed_plugins.json` by hand — that creates a mess someone else has to unpick. For an ordinary stale install the two commands in Step 2 are the fix; for a dangling install the sanctioned repair is the CLI's own `uninstall` + `install` (Step 2b), never a hand-deleted folder.
 - Do not ask them to share a token, password, or the contents of any file under `~/.claude`.
 - Do not tell them to wrap or edit `hooks.json` / `plugin.json`. A `Hook load failed` / `expected record` error through 0.24.0 is a plugin bug; updating to 0.24.1+ is the fix.
