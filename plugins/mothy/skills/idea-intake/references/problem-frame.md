@@ -27,13 +27,6 @@ can be relieved by [solution]. However, [persona] would have to be okay with
 [downside/limitation]. Unlike [status quo], [solution] will [differentiator], allowing
 Moth+Flame to [goal].
 
-**Five-factor read** (traffic lights 🟢🟡🔴 with one-line reasons — a teaching aid, not a gate):
-- Magnitude — how many people have this pain?
-- Frequency — how often do they hit it?
-- Severity — how bad is it (cognitive load, risk, cost)?
-- Competition — who else solves it, and how limited are they?
-- Contrast — how loudly do people complain about existing solutions?
-
 **Riskiest assumption**: [the thing that, if wrong, kills the idea — this is what the
 prototype must test]
 

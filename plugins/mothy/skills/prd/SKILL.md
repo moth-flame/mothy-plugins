@@ -37,8 +37,8 @@ Read `references/template.md` for the exact section order before drafting;
    stakeholder concerns.
 4. **Mothy intel/OpsHub**: which customers/opportunities are waiting on this — feeds Success
    Metrics and the deadline rationale.
-5. **AI-powered feature?** Apply `references/ai-feature-addendum.md`: 5-factor pain lens,
-   4D structure, dual success metrics, eval-set requirements.
+5. **AI-powered feature?** Apply `references/ai-feature-addendum.md`: 4D structure, dual
+   success metrics, eval-set requirements.
 
 ## Phase 1 — The questions that survive (human-only)
 

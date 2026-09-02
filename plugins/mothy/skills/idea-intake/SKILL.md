@@ -38,10 +38,8 @@ Research before asking anything else:
 - Light web research: does the market have a name for this problem?
 
 Produce a one-screen **Problem Frame** (format in references/problem-frame.md): persona,
-pain, job-to-be-done, evidence found, the five-slot problem statement with gaps marked
-[UNKNOWN], and a 5-factor traffic-light row (magnitude/frequency/severity/competition/
-contrast). The traffic lights are a conversation starter that teaches product thinking, not
-a gate. Confirm in the submitter's own words: "did I understand you right?"
+pain, job-to-be-done, evidence found, and the five-slot problem statement with gaps marked
+[UNKNOWN]. Confirm in the submitter's own words: "did I understand you right?"
 
 ## Stage 3 — Disposable prototype (Sketch tier)
 
@@ -72,12 +70,12 @@ said" from "people did," then present the verdict options:
 
 Write the **Idea Dossier**: a Google Doc via Mothy `docs_create_formatted`, shared so
 ai@mothandflamevr.com can edit, titled `Idea Dossier: [Name]` — problem frame, prototype
-link + demo video, evidence summary, 5-factor scores, open unknowns, verdict. Footer:
+link + demo video, evidence summary, open unknowns, verdict. Footer:
 `Project: <name> | Stage: Spark (or Proof if evidence gathered) | Prior artifact: none`.
 
 **Register the project.** Create or update the R&D Project Registry entry: project name,
 originator, stage (Spark, or Proof once evidence exists), problem frame link, prototype
-link + demo video, 5-factor scores, verdict. The registry is how Rich and Mothy see every
+link + demo video, verdict. The registry is how Rich and Mothy see every
 project without status meetings or check-ins — registering is what makes the idea real. If
 no registry is configured yet, the Idea Dossier serves as the entry: offer to Slack Rich
 Headley the dossier link so he has visibility from day one.

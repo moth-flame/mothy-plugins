@@ -2,8 +2,8 @@
 
 | Artifact | What it is | Stage | Made by | Template / canon |
 |---|---|---|---|---|
-| R&D Project Registry entry | Index of record: project, originator, stage, sponsor, 5-factor lens, artifact links, repo + live-app links, commit summaries | Spark → onward | idea-intake creates; every skill updates | R&D Project Registry (see process doc) |
-| Idea Dossier | Problem frame, prototype link + demo, evidence summary, 5-factor scores, unknowns, verdict | Spark/Proof | idea-intake skill | (Google Doc, no fixed template) |
+| R&D Project Registry entry | Index of record: project, originator, stage, sponsor, artifact links, repo + live-app links, commit summaries | Spark → onward | idea-intake creates; every skill updates | R&D Project Registry (see process doc) |
+| Idea Dossier | Problem frame, prototype link + demo, evidence summary, unknowns, verdict | Spark/Proof | idea-intake skill | (Google Doc, no fixed template) |
 | Disposable prototype (Sketch) | Watermarked, synthetic-data, internal-only demo testing the riskiest assumption | Spark/Proof | idea-intake skill | prototype-guardrails.md |
 | PR/FAQ | Amazon-style press release + FAQ, drafted FROM the prototype and evidence | Proof | pr-faq skill | https://docs.google.com/document/d/16TyUb5L8hiv_EGdWeV-7O1Bi2xAELoU6owe2w_rWoAM/edit |
 | PRD | The Commit decision record: problem statement, personas, MoSCoW job stories per milestone, appetite, evidence, security, FAQ | Commit | prd skill | https://docs.google.com/document/d/1WUkbssjpLzkxIsTZ0VAca1FagCZ4maTKTeEaqOMiPP4/edit |
