@@ -428,6 +428,14 @@ export const meta = {
 
 const BRIEF = `<full self-contained context — agents see no other conversation>`
 
+// §0.5 worker tier — ONE name, ONE place. A cheap/fast model for mechanical,
+// well-specified, high-volume calls. The critic agents below deliberately OMIT
+// this key and inherit the orchestrator's stronger model; that asymmetry is the
+// point (§0.5), not an oversight. If this environment offers no cheaper tier,
+// DELETE the key rather than guessing a name — a run must never fail over a
+// model that is not there.
+const WORKER_MODEL = 'sonnet'
+
 const ROLES = [
   { name: 'architecture', focus: `...` },
   { name: 'product', focus: `...` },
@@ -440,6 +448,7 @@ phase('Independent planning')
 const plans = await parallel(ROLES.map(({ name, focus }) => () =>
   agent(`${CAVEMAN_ULTRA}\n\n${BRIEF}\n\n## Your role: ${name}\n\n${focus}\n\nPlan independently.`, {
     label: name,
+    model: WORKER_MODEL,   // independent role plan — worker tier (§0.5)
     schema: PLAN_SCHEMA
   })
 ))

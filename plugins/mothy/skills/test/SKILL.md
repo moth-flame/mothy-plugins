@@ -318,6 +318,14 @@ export const meta = {
 
 // Detected per §0.2 — NEVER a hardcoded literal. E2E_CMD may be null.
 const { TEST_CMD, E2E_CMD } = detectTestCommands(REPO_ROOT)
+// §0.5 worker tier — ONE name, ONE place. A cheap/fast model for mechanical,
+// well-specified, high-volume calls. The critic agents below deliberately OMIT
+// this key and inherit the orchestrator's stronger model; that asymmetry is the
+// point (§0.5), not an oversight. If this environment offers no cheaper tier,
+// DELETE the key rather than guessing a name — a run must never fail over a
+// model that is not there.
+const WORKER_MODEL = 'sonnet'
+
 
 // Schemas
 const MATRIX_SCHEMA = { type:'object', required:['areas'], properties:{ areas:{ type:'array', items:{
@@ -350,7 +358,7 @@ phase('Author')
 // one area per disjoint test file; red-green proven
 const written = await parallel(groupAreas(matrix.areas).map(area => () =>
   agent(`${CAVEMAN_ULTRA}\n\n${BRIEF}\n\nWrite tests for: ${JSON.stringify(area)}\nRun with: ${TEST_CMD}. Match repo existing harness + layout; do NOT add a new runner.\nRed-green MANDATORY: prove each fails before / passes after. Expected from the SPEC, never read back from the impl. No silent skips (// SKIP: tombstone). Deterministic.`,
-    { label:`author:${area.key}`, phase:'Author', schema:TEST_SCHEMA }))
+    { label:`author:${area.key}`, model:WORKER_MODEL, phase:'Author', schema:TEST_SCHEMA }))
 
 phase('Audit')
 // critic sees spec + test + impl diff + T-rubric; NOT told the suite is green; NOT given regression output

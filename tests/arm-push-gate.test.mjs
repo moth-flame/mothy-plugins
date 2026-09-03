@@ -408,8 +408,10 @@ test('WIRING: this repo practises what it ships — it tracks its own pre-push g
   // home repo: CLAUDE.md mandates a pre-push gate and none would exist.
   const hook = join(ROOT, '.githooks', 'pre-push');
   assert.ok(existsSync(hook), 'the repo that ships the arming hook must ship a gate to arm');
-  assert.match(readFileSync(hook, 'utf8'), /node --test tests\//,
-    'the gate must be the same portable command CI runs');
+  // Reporter flags are allowed to differ from CI's (the hook uses `dot` so its
+  // output does not flood an agent session's context); WHICH tests run may not.
+  assert.match(readFileSync(hook, 'utf8'), /node --test (--[^\s]+ )*tests\//,
+    'the gate must run the same portable test set CI runs');
   assert.equal(spawnSync('test', ['-x', hook]).status, 0, 'git skips a non-executable hook silently');
 });
 

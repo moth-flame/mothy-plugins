@@ -731,6 +731,14 @@ const PLAN = sanitizePlan(`<full plan text>`)
 
 // Detected per §0.2 — NEVER a hardcoded literal.
 const { TEST_CMD, REGRESSION_CMD, E2E_CMD /* may be null */ } = detectTestCommands(REPO_ROOT)
+// §0.5 worker tier — ONE name, ONE place. A cheap/fast model for mechanical,
+// well-specified, high-volume calls. The critic agents below deliberately OMIT
+// this key and inherit the orchestrator's stronger model; that asymmetry is the
+// point (§0.5), not an oversight. If this environment offers no cheaper tier,
+// DELETE the key rather than guessing a name — a run must never fail over a
+// model that is not there.
+const WORKER_MODEL = 'sonnet'
+
 
 const UNITS = [
   { id: 'u1', title: '...', files: [...], deps: [], acceptance_criteria: [...] },
@@ -847,13 +855,13 @@ const indepResults = await parallel(INDEP.map(unit => () =>
       : agent(
           `${CAVEMAN_ULTRA}\n\nWrite failing test for unit ${u.id}. Match repo existing harness + layout. Run with: ${TEST_CMD}\n` +
           `Assert the SPEC, never read expected value back from impl.\n\nPlan:\n${PLAN}\n\nUnit: ${JSON.stringify(u)}`,
-          { label: `test:${u.id}`, phase: 'Unit work', schema: TEST_SCHEMA }
+          { label: `test:${u.id}`, model: WORKER_MODEL, phase: 'Unit work', schema: TEST_SCHEMA }
         ),
 
     // Build agent — always runs
     (testResult, u) => agent(
       `${CAVEMAN_ULTRA}\n\nImplement unit ${u.id}. Make test pass.\n\n${PLAN}\n\nUnit: ${JSON.stringify(u)}\n\nTest: ${JSON.stringify(testResult)}`,
-      { label: `build:${u.id}`, phase: 'Unit work', schema: BUILD_SCHEMA, isolation: 'worktree' }
+      { label: `build:${u.id}`, model: WORKER_MODEL, phase: 'Unit work', schema: BUILD_SCHEMA, isolation: 'worktree' }
     ),
 
     // Adversarial verifier — skipped on trivial. Strong critic tier if available (§0.5).
@@ -928,6 +936,7 @@ while (iteration < 3) {
     `Each failure: file:line. Fix anything fixable <50 LOC.`,
     {
       label: `regression:${iteration}`,
+      model: WORKER_MODEL,   // running suites is mechanical — worker tier (§0.5)
       phase: 'Regression + fix',
       schema: {
         type: 'object',

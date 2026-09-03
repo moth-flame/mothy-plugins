@@ -806,6 +806,14 @@ const TIER = classifyBug(BUG)  // 'trivial' | 'standard' | 'risky' — §0, bias
 
 // Detected per §0.2 — NEVER a hardcoded literal.
 const { TEST_CMD, REGRESSION_CMD, E2E_CMD /* may be null */ } = detectTestCommands(REPO_ROOT)
+// §0.5 worker tier — ONE name, ONE place. A cheap/fast model for mechanical,
+// well-specified, high-volume calls. The critic agents below deliberately OMIT
+// this key and inherit the orchestrator's stronger model; that asymmetry is the
+// point (§0.5), not an oversight. If this environment offers no cheaper tier,
+// DELETE the key rather than guessing a name — a run must never fail over a
+// model that is not there.
+const WORKER_MODEL = 'sonnet'
+
 
 // ────────────────────────────────────────────────────────────────
 // Schemas
@@ -930,7 +938,7 @@ const repro = await agent(
   `Match repo existing test harness + layout. Run with: ${TEST_CMD}\n` +
   `If cannot reproduce: set reproduced=false + not_reproducible_reason. Do NOT guess.\n\n` +
   `BUG:\n${BUG}`,
-  { label: `reproduce:${BUG_ID}`, phase: 'Reproduce', schema: REPRO_SCHEMA }
+  { label: `reproduce:${BUG_ID}`, model: WORKER_MODEL, phase: 'Reproduce', schema: REPRO_SCHEMA }
 )
 
 if (!repro.reproduced) {
@@ -956,7 +964,7 @@ const diagnoses = SCOUTS === 0 ? [] : await parallel(LAYERS.map(layer => () =>
     `Trace symptom→cause, file:line per hop. Set is_root_not_symptom + why.\n` +
     `Blast radius: smallest files to change + siblings to NOT regress.\n\n` +
     `BUG:\n${BUG}\n\nREPRO (red proof):\n${repro.observed_wrong}\n${repro.red_proof}`,
-    { label: `diagnose:${layer}`, phase: 'Diagnose', schema: DIAGNOSIS_SCHEMA }
+    { label: `diagnose:${layer}`, model: WORKER_MODEL, phase: 'Diagnose', schema: DIAGNOSIS_SCHEMA }
   )
 ))
 
@@ -1049,6 +1057,7 @@ while (rIter < 3) {
     `Each failure: file:line.`,
     {
       label: `regression:${rIter}`,
+      model: WORKER_MODEL,   // running suites is mechanical — worker tier (§0.5)
       phase: 'Regression',
       schema: {
         type: 'object',

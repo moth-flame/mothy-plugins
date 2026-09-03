@@ -2,9 +2,15 @@
 #
 # pre-push — this repo's portable gate.
 #
-# `node --test tests/` is exactly what CI (`validate.yml`) runs, so a red push
-# here is a red CI run you have not waited for yet. There is no root
-# package.json on purpose — the node test runner is the whole harness.
+# This runs exactly the tests CI (`validate.yml`) runs, so a red push here is a
+# red CI run you have not waited for yet. There is no root package.json on
+# purpose — the node test runner is the whole harness.
+#
+# `--test-reporter=dot` only changes the OUTPUT, never which tests run: ~300 TAP
+# lines become ~5, and failures still print in full at the end. It matters
+# because this hook usually fires inside an agent session, where every one of
+# those lines is context that gets re-sent on every later turn. CI keeps the
+# default reporter — its logs are read by a person, and cost nothing to a model.
 #
 # Do NOT use --no-verify. If this is failing, the tests are telling you
 # something; fix the code, or change the test as its own clearly-explained step.
@@ -23,5 +29,5 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "pre-push: node --test tests/"
-node --test tests/
+echo "pre-push: node --test --test-reporter=dot tests/"
+node --test --test-reporter=dot tests/

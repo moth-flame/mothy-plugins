@@ -112,7 +112,10 @@ Mothy is two cooperating surfaces — never confuse them
   the event map. `tests/hook-wiring.test.mjs` pins both facts.
 - `tests/*.mjs` — `node --test` guards (manifest shape, artifact contract,
   creds resolver, vendored-tooling presence, the compaction hooks, the pre-push
-  arming hook).
+  arming hook, and `model-tiering.test.mjs` — §0.5's worker tier must be passed
+  to `agent()` in the engineering skills' worked scripts, and must NEVER land on
+  a critic label (`verify:` / `audit:` / `conformance`), because a cheap critic
+  rubber-stamps a bandaid and nothing in the run would look wrong).
 - `.githooks/pre-push` — this repo's OWN gate (runs `node --test tests/`).
   Tracked, so it rides a clone; armed per clone by `arm-push-gate.mjs` or by
   hand with `git config core.hooksPath .githooks`.
@@ -192,9 +195,14 @@ invoked even if the hook is off.
 
 ## Run / test / publish
 
-- **Test:** `node --test tests/` (no root `package.json` — pure node test
-  runner). This is the portable gate; CI (`validate.yml`) runs exactly this on
-  push to `main` + PRs.
+- **Test:** `node --test --test-reporter=dot tests/` (no root `package.json` —
+  pure node test runner). This is the portable gate; CI (`validate.yml`) runs
+  the same tests on push to `main` + PRs.
+  **Use the `dot` reporter locally and in `.githooks/pre-push`** — the default
+  reporter prints ~300 TAP lines for these ~117 tests, and inside an agent
+  session every one of those lines stays in context and is re-sent on every
+  later turn. `dot` prints ~5 lines and still dumps failures in full. CI keeps
+  the default: those logs are for a person, and cost a model nothing.
 - **Strict validate (if `claude` CLI present):** `claude plugin validate
   ./plugins/mothy --strict`.
 - **Publish:** push to `main` on GitHub. There is no build/deploy step — the
