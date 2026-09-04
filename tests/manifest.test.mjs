@@ -418,3 +418,20 @@ test('preflight demands a test runner only where the skill actually runs one', (
     );
   }
 });
+
+// The freshness hook reads the marketplace manifest's advertised version as its
+// UPSTREAM signal (check-plugin-freshness.mjs, 2026-09-03). If that number ever
+// drifts from the plugin's own manifest, the hook compares an installed version
+// against a number no install can ever equal — a permanent false stale, or a
+// permanent false current, with nothing to say which.
+test('marketplace.json and plugin.json advertise the SAME version', () => {
+  const marketplace = readJson(join(repoRoot, '.claude-plugin', 'marketplace.json'));
+  const plugin = readJson(join(pluginRoot, '.claude-plugin', 'plugin.json'));
+  const entry = marketplace.plugins.find((p) => p.name === 'mothy');
+  assert.ok(entry, 'marketplace.json must advertise the mothy plugin');
+  assert.equal(
+    entry.version,
+    plugin.version,
+    'the version the marketplace advertises is what check-plugin-freshness.mjs reads as upstream; a drift here makes that reading a lie',
+  );
+});

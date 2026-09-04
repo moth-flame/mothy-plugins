@@ -57,6 +57,8 @@ import {
   selectInstalledEntry,
   readCachedVersions,
   readInstalledVersion,
+  readMarketplaceUpstream,
+  renderMessage,
 } from '../plugins/mothy/hooks/check-plugin-freshness.mjs';
 import { eventsFromHooksFile } from './hook-wiring.mjs';
 
@@ -94,13 +96,21 @@ test('F2 ten vs nine component ordering: 0.10.0 beats 0.9.0 numerically', () => 
   assert.equal(result.newest, '0.10.0');
 });
 
-test('F3 equal versions => current', () => {
-  const result = classifyPluginFreshness({ installedVersion: '0.17.0', cachedVersions: ['0.17.0', '0.16.0'] });
+test('F3 equal versions => current (with positive upstream evidence — see U3 for why that is required)', () => {
+  const result = classifyPluginFreshness({
+    installedVersion: '0.17.0',
+    cachedVersions: ['0.17.0', '0.16.0'],
+    upstream: { version: '0.17.0', reason: null, ageMs: 60_000, fresh: true },
+  });
   assert.equal(result.state, 'current');
 });
 
-test('F4 installed newer than every cached entry => current (local dev install)', () => {
-  const result = classifyPluginFreshness({ installedVersion: '0.99.0', cachedVersions: ['0.17.0', '0.16.0'] });
+test('F4 installed newer than every known version => current (local dev install)', () => {
+  const result = classifyPluginFreshness({
+    installedVersion: '0.99.0',
+    cachedVersions: ['0.17.0', '0.16.0'],
+    upstream: { version: '0.17.0', reason: null, ageMs: 60_000, fresh: true },
+  });
   assert.equal(result.state, 'current');
 });
 
@@ -110,12 +120,12 @@ test('F5 installed version missing/null => unknown, never current', () => {
   assert.equal(classifyPluginFreshness({ installedVersion: '', cachedVersions: ['0.17.0'] }).state, 'unknown');
 });
 
-test('F6 cached list empty => unknown, never current', () => {
+test('F6 nothing cached and no upstream reading => unknown, never current', () => {
   const result = classifyPluginFreshness({ installedVersion: '0.17.0', cachedVersions: [] });
   assert.equal(result.state, 'unknown');
 });
 
-test('F7 every cached entry unparseable => unknown', () => {
+test('F7 every cached entry unparseable and no upstream reading => unknown', () => {
   const result = classifyPluginFreshness({ installedVersion: '0.7.0', cachedVersions: ['nightly', 'tmp'] });
   assert.equal(result.state, 'unknown');
 });
@@ -139,7 +149,34 @@ function makeCacheEntry(cacheDir, version, { bare = false } = {}) {
   writeFileSync(join(dir, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'mothy', version }));
 }
 
-function claudeHomeFixture({ installedVersion, cachedVersions, entries, bareCachedVersions = [] }) {
+/**
+ * Write the LOCAL MARKETPLACE CHECKOUT (the upstream signal) plus the
+ * known_marketplaces.json record that says when it was last refreshed. Both
+ * halves are needed: the manifest says WHAT upstream advertises, the record
+ * says whether that reading is worth anything.
+ */
+function writeMarketplace(claudeHome, { version, lastUpdated }) {
+  const pluginsDir = join(claudeHome, 'plugins');
+  const checkout = join(pluginsDir, 'marketplaces', 'mothy-marketplace');
+  mkdirSync(join(checkout, '.claude-plugin'), { recursive: true });
+  writeFileSync(
+    join(checkout, '.claude-plugin', 'marketplace.json'),
+    JSON.stringify({ name: 'mothy-marketplace', plugins: [{ name: 'mothy', source: './plugins/mothy', version }] }),
+  );
+  const record = { 'mothy-marketplace': { installLocation: checkout } };
+  if (lastUpdated) record['mothy-marketplace'].lastUpdated = lastUpdated;
+  mkdirSync(pluginsDir, { recursive: true });
+  writeFileSync(join(pluginsDir, 'known_marketplaces.json'), JSON.stringify(record));
+}
+
+function marketplaceHomeFixture({ version, lastUpdated }) {
+  const dir = mkdtempSync(join(tmpdir(), 'mothy-marketplace-home-'));
+  mkdirSync(join(dir, 'plugins'), { recursive: true });
+  writeMarketplace(dir, { version, lastUpdated });
+  return dir;
+}
+
+function claudeHomeFixture({ installedVersion, cachedVersions, entries, bareCachedVersions = [], marketplace }) {
   const dir = mkdtempSync(join(tmpdir(), 'mothy-plugin-freshness-'));
   const pluginsDir = join(dir, 'plugins');
   mkdirSync(pluginsDir, { recursive: true });
@@ -153,6 +190,7 @@ function claudeHomeFixture({ installedVersion, cachedVersions, entries, bareCach
   mkdirSync(cacheDir, { recursive: true });
   for (const v of cachedVersions || []) makeCacheEntry(cacheDir, v);
   for (const v of bareCachedVersions) makeCacheEntry(cacheDir, v, { bare: true });
+  if (marketplace) writeMarketplace(dir, marketplace);
   return dir;
 }
 
@@ -210,7 +248,11 @@ test('F11 E2E stale: real script warns naming both versions, exits 0', () => {
 });
 
 test('F11 E2E current: real script is silent, exits 0', () => {
-  const home = claudeHomeFixture({ installedVersion: '0.17.0', cachedVersions: ['0.17.0', '0.16.0'] });
+  const home = claudeHomeFixture({
+    installedVersion: '0.17.0',
+    cachedVersions: ['0.17.0', '0.16.0'],
+    marketplace: { version: '0.17.0', lastUpdated: new Date().toISOString() },
+  });
   const res = run(home);
   assert.equal(res.status, 0, `must always exit 0 (stderr: ${res.stderr})`);
   assert.equal(res.stdout.trim(), '', 'must be silent when current — a hook that speaks every session gets muted');
@@ -380,7 +422,12 @@ test('R4b a bare cache directory is not counted as a version', () => {
 });
 
 test('R4c a stray high-sorting directory cannot manufacture a permanent false stale', () => {
-  const home = claudeHomeFixture({ installedVersion: '0.17.0', cachedVersions: ['0.17.0'], bareCachedVersions: ['9'] });
+  const home = claudeHomeFixture({
+    installedVersion: '0.17.0',
+    cachedVersions: ['0.17.0'],
+    bareCachedVersions: ['9'],
+    marketplace: { version: '0.17.0', lastUpdated: new Date().toISOString() },
+  });
   const res = run(home);
   assert.equal(res.status, 0, `must always exit 0 (stderr: ${res.stderr})`);
   assert.equal(
@@ -429,4 +476,159 @@ test('R6 readInstalledVersion reports a reason instead of a bare null (so unknow
   const got = readInstalledVersion(home, home);
   assert.equal(got.version, null);
   assert.equal(got.reason, 'installed_plugins_unreadable');
+});
+
+// ── U1-U9: upstream visibility (2026-09-03) ────────────────────────────────
+//
+// THE SECOND INCIDENT. The cache-only comparison above can only see versions
+// ALREADY UNPACKED on this machine. A user who never refreshes the marketplace
+// has nothing newer cached, so the guard reported nothing — forever. Measured
+// 2026-09-03: Kevin Cornish ran 0.1.1 from 2026-06-23 to 2026-09-03 (25 minor
+// versions, 2.5 months) with no warning, and Rich's own machine sat on 0.26.0
+// against an origin at 0.26.5.
+//
+// The fix reads the LOCAL MARKETPLACE CHECKOUT
+// (~/.claude/plugins/marketplaces/mothy-marketplace/.claude-plugin/marketplace.json)
+// — the version the marketplace advertises, which is upstream even when no
+// build of it was ever unpacked into the cache. The checkout can itself be
+// stale, so its own refresh time is read from known_marketplaces.json and
+// REPORTED; otherwise the blindness has merely moved one level out.
+//
+// HONESTY: 'current' now requires POSITIVE upstream evidence. Unreadable
+// checkout, unknown refresh time, or a checkout older than
+// MARKETPLACE_STALE_AFTER_MS => 'unknown', never 'current'.
+
+test('U1 newer version advertised by the marketplace checkout, nothing newer cached => stale', () => {
+  const result = classifyPluginFreshness({
+    installedVersion: '0.1.1',
+    cachedVersions: ['0.1.1'],
+    upstream: { version: '0.26.5', reason: null, ageMs: 60_000, fresh: true },
+  });
+  assert.equal(
+    result.state,
+    'stale',
+    "Kevin's exact shape: 0.1.1 installed, 0.1.1 the only thing cached, 0.26.5 advertised upstream. Cache-only comparison reports nothing here — that is the 2.5-month silence",
+  );
+  assert.equal(result.newest, '0.26.5');
+  assert.equal(result.newestSource, 'marketplace');
+});
+
+test('U2 upstream and cache both consulted; the higher of the two wins', () => {
+  const fromCache = classifyPluginFreshness({
+    installedVersion: '0.20.0',
+    cachedVersions: ['0.26.4'],
+    upstream: { version: '0.26.3', reason: null, ageMs: 60_000, fresh: true },
+  });
+  assert.equal(fromCache.newest, '0.26.4');
+  assert.equal(fromCache.newestSource, 'cache');
+
+  const fromMarketplace = classifyPluginFreshness({
+    installedVersion: '0.20.0',
+    cachedVersions: ['0.26.3'],
+    upstream: { version: '0.26.5', reason: null, ageMs: 60_000, fresh: true },
+  });
+  assert.equal(fromMarketplace.newest, '0.26.5');
+  assert.equal(fromMarketplace.newestSource, 'marketplace');
+});
+
+test('U3 no upstream evidence at all => unknown, NEVER current', () => {
+  const result = classifyPluginFreshness({ installedVersion: '0.26.5', cachedVersions: ['0.26.5'] });
+  assert.equal(
+    result.state,
+    'unknown',
+    'installed matching everything cached proves nothing about upstream — that inference is exactly how a 25-version gap stayed silent',
+  );
+  assert.equal(result.reason, 'upstream_not_checked');
+});
+
+test('U4 an unreadable marketplace checkout => unknown with its own reason', () => {
+  const result = classifyPluginFreshness({
+    installedVersion: '0.26.5',
+    cachedVersions: ['0.26.5'],
+    upstream: { version: null, reason: 'marketplace_checkout_unreadable', ageMs: null, fresh: false },
+  });
+  assert.equal(result.state, 'unknown');
+  assert.equal(result.reason, 'marketplace_checkout_unreadable');
+});
+
+test('U5 a STALE checkout cannot certify current — the blindness is reported, not moved one level out', () => {
+  const ageMs = 40 * 24 * 60 * 60 * 1000;
+  const result = classifyPluginFreshness({
+    installedVersion: '0.26.5',
+    cachedVersions: ['0.26.5'],
+    upstream: { version: '0.26.5', reason: 'marketplace_checkout_stale', ageMs, fresh: false },
+  });
+  assert.equal(result.state, 'unknown', 'a checkout nobody has refreshed in 40 days says nothing about origin');
+  assert.equal(result.reason, 'marketplace_checkout_stale');
+  assert.equal(result.upstreamAgeMs, ageMs);
+  assert.match(renderMessage(result), /40 days/, 'the notice must name how old the checkout is, or the user cannot act on it');
+});
+
+test('U6 a stale checkout that nonetheless shows a NEWER version still reports stale (positive evidence outranks freshness)', () => {
+  const result = classifyPluginFreshness({
+    installedVersion: '0.1.1',
+    cachedVersions: ['0.1.1'],
+    upstream: { version: '0.20.0', reason: 'marketplace_checkout_stale', ageMs: 40 * 24 * 60 * 60 * 1000, fresh: false },
+  });
+  assert.equal(result.state, 'stale', 'an old checkout showing something newer is proof a newer version exists; only the "you are current" claim needs freshness');
+  assert.equal(result.newest, '0.20.0');
+});
+
+test('U7 fresh checkout agreeing with the installed version => current, silent', () => {
+  const result = classifyPluginFreshness({
+    installedVersion: '0.26.5',
+    cachedVersions: ['0.26.5'],
+    upstream: { version: '0.26.5', reason: null, ageMs: 60_000, fresh: true },
+  });
+  assert.equal(result.state, 'current');
+  assert.equal(renderMessage(result), '');
+});
+
+test('U8 readMarketplaceUpstream reads the checkout version and grades its own freshness', () => {
+  const now = Date.UTC(2026, 8, 3, 12, 0, 0);
+
+  const fresh = marketplaceHomeFixture({ version: '0.26.5', lastUpdated: new Date(now - 60_000).toISOString() });
+  const gotFresh = readMarketplaceUpstream(fresh, now);
+  assert.equal(gotFresh.version, '0.26.5');
+  assert.equal(gotFresh.fresh, true);
+
+  const old = marketplaceHomeFixture({ version: '0.26.5', lastUpdated: new Date(now - 40 * 24 * 60 * 60 * 1000).toISOString() });
+  const gotOld = readMarketplaceUpstream(old, now);
+  assert.equal(gotOld.version, '0.26.5');
+  assert.equal(gotOld.fresh, false, 'older than MARKETPLACE_STALE_AFTER_MS');
+  assert.equal(gotOld.reason, 'marketplace_checkout_stale');
+
+  const noStamp = marketplaceHomeFixture({ version: '0.26.5', lastUpdated: null });
+  const gotNoStamp = readMarketplaceUpstream(noStamp, now);
+  assert.equal(gotNoStamp.fresh, false);
+  assert.equal(gotNoStamp.reason, 'marketplace_refresh_time_unknown');
+
+  const future = marketplaceHomeFixture({ version: '0.26.5', lastUpdated: new Date(now + 60 * 60 * 1000).toISOString() });
+  const gotFuture = readMarketplaceUpstream(future, now);
+  assert.equal(gotFuture.fresh, false, 'a future-dated stamp is clock skew — never treat it as freshest possible');
+  assert.equal(gotFuture.reason, 'marketplace_refresh_time_in_future');
+
+  const missing = mkdtempSync(join(tmpdir(), 'mothy-no-marketplace-'));
+  const gotMissing = readMarketplaceUpstream(missing, now);
+  assert.equal(gotMissing.version, null);
+  assert.equal(gotMissing.reason, 'marketplace_checkout_unreadable');
+});
+
+test('U9 E2E: the real script warns from the marketplace checkout alone, with nothing newer in the cache', () => {
+  const home = claudeHomeFixture({
+    installedVersion: '0.1.1',
+    cachedVersions: ['0.1.1'],
+    marketplace: { version: '0.26.5', lastUpdated: new Date().toISOString() },
+  });
+  const res = run(home);
+  assert.equal(res.status, 0, `must always exit 0 (stderr: ${res.stderr})`);
+  assert.match(res.stdout, /WARNING/, "Kevin's shape must now speak; before this change the cache-only comparison was silent for 2.5 months");
+  assert.match(res.stdout, /0\.1\.1/);
+  assert.match(res.stdout, /0\.26\.5/);
+});
+
+test('U10 source still carries no network primitive — the upstream read is a LOCAL file read', () => {
+  const src = stripComments(readFileSync(SCRIPT, 'utf8'));
+  assert.doesNotMatch(src, /\bfetch\s*\(/, 'the marketplace checkout is on disk; a SessionStart hook must not hang on a socket');
+  assert.doesNotMatch(src, /\bhttps?:\/\//i);
 });

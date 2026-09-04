@@ -45,13 +45,35 @@
 //
 // ALWAYS exit 0 — a SessionStart hook that exits non-zero is noise at best.
 //
-// Deliberate design note: this compares installed against the CACHED
-// versions, never a network/marketplace lookup. That is a choice, not a
-// shortcut — it needs no network, cannot hang a session start, and it is
-// SUFFICIENT, because it is exactly the state that existed on 2026-08-23:
-// 0.15.0 and 0.16.0 sat unpacked in the cache while 0.7.0 ran. It cannot
-// detect "a newer version exists upstream but was never fetched into the
-// local cache" — that is out of scope for this guard.
+// ── The 2026-09-03 second incident: cache-only was NOT sufficient ────────
+//
+// The paragraph that stood here called the cache-only comparison "SUFFICIENT"
+// and put "a newer version exists upstream but was never fetched into the
+// local cache" out of scope. That was wrong, and the cost is measured:
+// Kevin Cornish ran 0.1.1 from 2026-06-23 to 2026-09-03 — 25 minor versions,
+// 2.5 months — with NOTHING newer in his cache and therefore no warning ever.
+// Rich's own machine sat on 0.26.0 against an origin at 0.26.5. The guard was
+// not quiet because things were fine; it was structurally unable to see.
+//
+// So there is now a second signal: the LOCAL MARKETPLACE CHECKOUT at
+// ~/.claude/plugins/marketplaces/<marketplace>/.claude-plugin/marketplace.json,
+// which carries the version upstream ADVERTISES whether or not any build of it
+// was ever unpacked here. It is a plain file read — no network, no subprocess,
+// nothing that can hang a SessionStart hook, and F10/U10 still forbid both.
+//
+// A local checkout can itself be behind origin, which would just move the
+// blindness one level out. So its refresh time is read from
+// known_marketplaces.json and REPORTED, and 'current' now requires POSITIVE,
+// FRESH upstream evidence. An unreadable checkout, an unknown refresh time, a
+// future-dated one, or one older than MARKETPLACE_STALE_AFTER_MS all report
+// 'unknown' naming the cause — never 'current'. Proving something newer EXISTS
+// needs no freshness (an old checkout showing a higher version is still proof);
+// only the claim that nothing newer exists does.
+//
+// NOT ADDRESSED, deliberately named rather than papered over: this hook ships
+// INSIDE the plugin, so a DISABLED or uninstalled plugin cannot warn that it is
+// disabled. That was the other half of the 2026-09-03 failure and needs a
+// surface outside the plugin.
 
 import {
   readFileSync,
@@ -80,6 +102,9 @@ const UNKNOWN_NOTICE_MAX_PER_DAY_MS = 24 * 60 * 60 * 1000;
 // file mentioning the CLI's own update verb, so a future reader cannot
 // mistake a rendered warning string for this module invoking it itself.
 const CLI_UPDATE_COMMAND = ['claude', 'plugin', ['upd', 'ate'].join(''), 'mothy'].join(' ');
+// Refreshing the marketplace checkout is what makes the upstream reading below
+// mean anything; the update verb is assembled the same way for the same reason.
+const MARKETPLACE_REFRESH_COMMAND = ['claude', 'plugin', 'marketplace', ['upd', 'ate'].join(''), MARKETPLACE_NAME].join(' ');
 
 // ── the pure core ────────────────────────────────────────────────────────
 
@@ -123,53 +148,92 @@ export function compareVersionParts(a, b) {
 }
 
 /**
- * classifyPluginFreshness({ installedVersion, cachedVersions, installedReason })
- *   -> { state: 'current' | 'stale' | 'unknown', installed, newest, reason }
+ * classifyPluginFreshness({ installedVersion, cachedVersions, installedReason, upstream })
+ *   -> { state, installed, newest, newestSource, reason, upstreamAgeMs }
  *
- * installedVersion: string | null | undefined
- * cachedVersions: string[] (directory names from the plugin cache)
- * installedReason: string | null — why the installed version is unavailable,
- *   supplied by the entry selector so an AMBIGUOUS multi-entry install reports
- *   its own cause instead of masquerading as an unreadable file.
+ * state: 'current' | 'stale' | 'unknown'
+ * newestSource: 'cache' | 'marketplace' | null — which reading produced `newest`.
+ *
+ * TWO SIGNALS, ASYMMETRIC USE. The cache holds only versions this machine
+ * already fetched; the marketplace checkout holds what upstream ADVERTISES.
+ * Either can PROVE a newer version exists, so `stale` takes the higher of the
+ * two regardless of how old the checkout is (a stale checkout showing 0.20.0
+ * against an installed 0.1.1 is still proof). But `current` is a claim about
+ * the ABSENCE of a newer version, and only fresh upstream evidence can support
+ * that — "everything I already downloaded matches what I run" says nothing at
+ * all, and that inference is precisely how a 25-version, 2.5-month gap stayed
+ * silent (2026-09-03).
  */
-export function classifyPluginFreshness({ installedVersion, cachedVersions, installedReason } = {}) {
+export function classifyPluginFreshness({ installedVersion, cachedVersions, installedReason, upstream } = {}) {
   const installedParsed = parseVersion(installedVersion);
   if (!installedParsed) {
     return {
       state: 'unknown',
       installed: installedVersion ?? null,
       newest: null,
+      newestSource: null,
       reason: installedReason || 'installed_version_unreadable',
+      upstreamAgeMs: null,
     };
   }
 
-  const list = Array.isArray(cachedVersions) ? cachedVersions : [];
   let newestRaw = null;
   let newestParsed = null;
+  let newestSource = null;
+
+  const list = Array.isArray(cachedVersions) ? cachedVersions : [];
   for (const raw of list) {
     const parsed = parseVersion(raw);
     if (!parsed) continue; // one bad entry among good ones is skipped, not fatal
     if (!newestParsed || compareVersionParts(parsed, newestParsed) > 0) {
       newestParsed = parsed;
       newestRaw = raw;
+      newestSource = 'cache';
     }
   }
 
-  if (!newestParsed) {
+  const up = upstream && typeof upstream === 'object'
+    ? upstream
+    : { version: null, reason: 'upstream_not_checked', ageMs: null, fresh: false };
+  const upstreamParsed = parseVersion(up.version);
+  const upstreamAgeMs = Number.isFinite(up.ageMs) ? up.ageMs : null;
+  if (upstreamParsed && (!newestParsed || compareVersionParts(upstreamParsed, newestParsed) > 0)) {
+    newestParsed = upstreamParsed;
+    newestRaw = up.version;
+    newestSource = 'marketplace';
+  }
+
+  if (newestParsed && compareVersionParts(installedParsed, newestParsed) < 0) {
     return {
-      state: 'unknown',
+      state: 'stale',
       installed: installedVersion,
-      newest: null,
-      reason: list.length === 0 ? 'no_cached_versions' : 'no_parseable_cached_versions',
+      newest: newestRaw,
+      newestSource,
+      reason: newestSource === 'marketplace' ? 'newer_version_upstream' : 'newer_version_cached',
+      upstreamAgeMs,
     };
   }
 
-  const cmp = compareVersionParts(installedParsed, newestParsed);
-  if (cmp >= 0) {
-    // Equal, or installed is newer than anything cached (local dev install).
-    return { state: 'current', installed: installedVersion, newest: newestRaw, reason: 'up_to_date' };
+  // Nothing we could SEE is newer. Only fresh upstream evidence licenses saying so.
+  if (upstreamParsed && up.fresh === true) {
+    return {
+      state: 'current',
+      installed: installedVersion,
+      newest: newestRaw,
+      newestSource,
+      reason: 'up_to_date',
+      upstreamAgeMs,
+    };
   }
-  return { state: 'stale', installed: installedVersion, newest: newestRaw, reason: 'newer_version_cached' };
+
+  return {
+    state: 'unknown',
+    installed: installedVersion,
+    newest: newestRaw,
+    newestSource,
+    reason: up.reason || (upstreamParsed ? 'marketplace_checkout_unverified' : 'upstream_not_checked'),
+    upstreamAgeMs,
+  };
 }
 
 // ── impure collectors (kept out of the pure core) ──────────────────────────
@@ -289,6 +353,82 @@ export function readCachedVersions(claudeHome) {
   }
 }
 
+/**
+ * How long a marketplace checkout's last refresh may be before we stop
+ * trusting it to answer "is anything newer upstream?".
+ *
+ * Claude Code refreshes a marketplace it manages, so a week is generous. The
+ * number only ever gates the CURRENT claim: a checkout older than this can
+ * still PROVE a newer version exists (U6), it just cannot certify that none
+ * does. Erring long here would resurrect the exact bug — a stale local copy
+ * confidently reporting "you are up to date".
+ */
+export const MARKETPLACE_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Read the LOCAL MARKETPLACE CHECKOUT — the upstream signal.
+ *
+ * ~/.claude/plugins/marketplaces/<marketplace>/.claude-plugin/marketplace.json
+ * carries the version the marketplace ADVERTISES, which exists whether or not
+ * any build of it was ever unpacked into the plugin cache. That is the whole
+ * point: the cache can only hold versions this machine already fetched, so a
+ * user who never refreshes has nothing newer cached and the old cache-only
+ * comparison was silent forever.
+ *
+ * The checkout can itself be stale, so its refresh time is read from
+ * known_marketplaces.json and REPORTED. Without that, the blindness has merely
+ * moved one level out and looks like coverage.
+ *
+ * Returns { version, reason, lastUpdatedMs, ageMs, fresh }. `fresh` is TRUE
+ * only on positive evidence: a readable version AND a parseable, non-future
+ * refresh stamp inside the window. Every other shape is fresh:false with a
+ * reason naming which half failed.
+ */
+export function readMarketplaceUpstream(claudeHome, now = Date.now()) {
+  const checkout = join(claudeHome, 'plugins', 'marketplaces', MARKETPLACE_NAME);
+
+  let version = null;
+  const manifest = readJson(join(checkout, '.claude-plugin', 'marketplace.json'));
+  if (manifest && Array.isArray(manifest.plugins)) {
+    const entry = manifest.plugins.find((p) => p && typeof p === 'object' && p.name === PLUGIN_NAME);
+    if (entry && typeof entry.version === 'string' && entry.version.trim()) version = entry.version.trim();
+  }
+  if (!version) {
+    // Fallback: the checked-out plugin's own manifest. The repo pins these two
+    // to agree, so this only matters for an older marketplace.json shape that
+    // carried no per-plugin version at all.
+    const pluginManifest = readJson(join(checkout, 'plugins', PLUGIN_NAME, '.claude-plugin', 'plugin.json'));
+    if (pluginManifest && typeof pluginManifest.version === 'string' && pluginManifest.version.trim()) {
+      version = pluginManifest.version.trim();
+    }
+  }
+
+  let lastUpdatedMs = null;
+  const known = readJson(join(claudeHome, 'plugins', 'known_marketplaces.json'));
+  const raw = known && typeof known === 'object' ? known[MARKETPLACE_NAME]?.lastUpdated : null;
+  if (typeof raw === 'string') {
+    const parsed = Date.parse(raw);
+    if (Number.isFinite(parsed)) lastUpdatedMs = parsed;
+  }
+  const ageMs = lastUpdatedMs === null ? null : now - lastUpdatedMs;
+
+  if (!version) {
+    return { version: null, reason: 'marketplace_checkout_unreadable', lastUpdatedMs, ageMs, fresh: false };
+  }
+  if (ageMs === null) {
+    return { version, reason: 'marketplace_refresh_time_unknown', lastUpdatedMs, ageMs: null, fresh: false };
+  }
+  if (ageMs < 0) {
+    // Clock skew. A future stamp read as "just refreshed" would be the most
+    // convenient possible lie; refuse it instead.
+    return { version, reason: 'marketplace_refresh_time_in_future', lastUpdatedMs, ageMs, fresh: false };
+  }
+  if (ageMs > MARKETPLACE_STALE_AFTER_MS) {
+    return { version, reason: 'marketplace_checkout_stale', lastUpdatedMs, ageMs, fresh: false };
+  }
+  return { version, reason: null, lastUpdatedMs, ageMs, fresh: true };
+}
+
 // ── output discipline ──────────────────────────────────────────────────────
 
 function unknownMarkerPath(claudeHome) {
@@ -358,15 +498,35 @@ function releaseUnknownNotice(claudeHome) {
   }
 }
 
+function describeAge(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+  if (days >= 1) return `${days} day${days === 1 ? '' : 's'}`;
+  const hours = Math.floor(ms / (60 * 60 * 1000));
+  return `${hours} hour${hours === 1 ? '' : 's'}`;
+}
+
 export function renderMessage(result) {
   if (result.state === 'stale') {
+    const where = result.newestSource === 'marketplace'
+      ? 'advertised by the mothy marketplace'
+      : 'already in your local plugin cache';
     return (
-      `mothy: WARNING — installed plugin version ${result.installed} is behind ${result.newest}, already in your local plugin cache.\n`
+      `mothy: WARNING — installed plugin version ${result.installed} is behind ${result.newest}, ${where}.\n`
       + `  Run \`${CLI_UPDATE_COMMAND}\` to load the current hooks/skills.`
     );
   }
   if (result.state === 'unknown') {
-    return `mothy: could not determine plugin freshness (${result.reason}). Run \`${CLI_UPDATE_COMMAND}\` if unsure.`;
+    // Never silent, and never dressed up as "you are current". Name the cause,
+    // and when the cause is an old local copy of the marketplace, say HOW old —
+    // a user cannot act on "could not determine" alone.
+    const age = describeAge(result.upstreamAgeMs);
+    const aged = age ? ` — the local copy of the marketplace was last refreshed ${age} ago` : '';
+    const installed = result.installed ? ` Installed: ${result.installed}.` : '';
+    return (
+      `mothy: could not determine plugin freshness (${result.reason})${aged}.${installed}\n`
+      + `  Run \`${MARKETPLACE_REFRESH_COMMAND}\` then \`${CLI_UPDATE_COMMAND}\` if unsure.`
+    );
   }
   return '';
 }
@@ -380,10 +540,12 @@ function main() {
   const claudeHome = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
   const installed = readInstalledVersion(claudeHome, process.cwd());
   const cachedVersions = readCachedVersions(claudeHome);
+  const upstream = readMarketplaceUpstream(claudeHome, Date.now());
   const result = classifyPluginFreshness({
     installedVersion: installed.version,
     cachedVersions,
     installedReason: installed.reason,
+    upstream,
   });
 
   if (result.state === 'stale') {
