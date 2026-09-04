@@ -60,6 +60,12 @@
           },
           {
             "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/report-plugin-heartbeat.mjs\" 2>/dev/null || true",
+            "timeout": 5,
+            "statusMessage": "Reporting plugin version..."
+          },
+          {
+            "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/inject-rd-nudge.sh\" 2>/dev/null || true",
             "timeout": 5,
             "statusMessage": "Loading R&D process nudge..."

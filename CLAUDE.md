@@ -139,12 +139,15 @@ carries the hook promise, the upload would look fine, and the lie would be back.
   re-implementing capture; the two skills hand off through `scratchpad/.state`
   artifacts.
 - `plugins/mothy/docs/` — `ARCHITECTURE.md`, `INTERFACE.md`, `CREDENTIALS.md`,
-  `ONBOARDING.md`, `VIDEO-ARTICLE-RUNBOOK.md`.
+  `ONBOARDING.md`, `VIDEO-ARTICLE-RUNBOOK.md`, `telemetry.md` (the whole of
+  what the heartbeat hook sends, and how a teammate turns it off — see below).
 - `plugins/mothy/hooks/` — the shipped hooks: the PreCompact pair
   (`precompact-snapshot.sh` + `auto-park.mjs`), the `UserPromptSubmit` notice
   (`post-compaction-notice.sh`), the SessionStart question-widget policy
-  (`inject-mc-policy.mjs` — kill switch `MOTHY_MC_ALWAYS_ON`, default ON), and
-  the SessionStart pre-push arming hook (`arm-push-gate.mjs` — see below).
+  (`inject-mc-policy.mjs` — kill switch `MOTHY_MC_ALWAYS_ON`, default ON), the
+  SessionStart pre-push arming hook (`arm-push-gate.mjs` — see below), and the
+  SessionStart fleet heartbeat (`report-plugin-heartbeat.mjs` — kill switch
+  `MOTHY_PLUGIN_HEARTBEAT`, default ON, see below).
   **Wiring is deliberately duplicated in `hooks/hooks.json` AND
   `.claude-plugin/plugin.json`** because we do not know which one a given
   Claude Code version reads. The event maps must stay identical, but the
@@ -159,6 +162,10 @@ carries the hook promise, the upload would look fine, and the lie would be back.
   to `agent()` in the engineering skills' worked scripts, and must NEVER land on
   a critic label (`verify:` / `audit:` / `conformance`), because a cheap critic
   rubber-stamps a bandaid and nothing in the run would look wrong).
+  **`tests/integration/` DOES run on this repo's gate** — `node --test tests/`
+  recurses — so anything placed there must stay hermetic and bounded. That is
+  the opposite of the Mothy repo's convention, where `tests/integration/` is
+  deliberately OFF the gate; do not carry that assumption across.
 - `.githooks/pre-push` — this repo's OWN gate (runs `node --test tests/`).
   Tracked, so it rides a clone; armed per clone by `arm-push-gate.mjs` or by
   hand with `git config core.hooksPath .githooks`.
@@ -235,6 +242,79 @@ without waiting for `/mc`.
 Skips `source=compact` so auto-compact does not repeat the block. Always exit 0;
 wiring is `2>/dev/null || true`. READ-ONLY. The `/mc` skill still works when
 invoked even if the hook is off.
+
+## `report-plugin-heartbeat.mjs` — the only thing that can see an ABSENT install
+
+**The gap it closes.** `check-plugin-freshness.mjs` warns you when your install
+is behind, and it ships INSIDE the plugin — so a disabled or uninstalled plugin
+can never warn that it is disabled. Kevin ran 0.1.1, disabled, for 2.5 months
+and no local guard could ever have spoken. **Absence is the signal**, and an
+absence is only visible from off the machine. There is deliberately no `enabled`
+field: a disabled plugin's hook does not run, so that field could only ever read
+`true`.
+
+Once a UTC day, SessionStart POSTs **four fields** — `install_id`,
+`claimed_email`, `plugin_version`, `freshness_state` — to one compiled-in
+`https://` endpoint. The field count is the point: no cwd, no repo, no hostname,
+no session id, no OS, no timestamp of any kind. `plugins/mothy/docs/telemetry.md`
+is the teammate-facing statement of exactly that, plus retention (45 days), who
+reads it, the off switch, and the honest limits. A first-run terminal notice is
+the only consent surface — the team announcement was declined.
+
+**Constraints that all follow from this repo being PUBLIC. Do not "fix" any of
+them:**
+
+- **No secret ships.** The write is unauthenticated and the email is
+  SELF-ASSERTED; the roster gate lives on the server. Accepted residual —
+  nobody may later close it by shipping a token into a public repo.
+- **The URL is compiled in and is NOT environment-overridable.** An
+  env-overridable URL is compiled-in in name only: a poisoned shell profile
+  would re-point that machine's payload at a host we never chose. The module
+  reads exactly ONE environment variable, the kill switch, and no other.
+- **The response body is NEVER read.** A SessionStart hook's stdout lands in the
+  model context of every session on ~47 machines; parsing a server reply would
+  make this an injection channel into all of them. Only the STATUS is read.
+- **Two independent timing bounds** — `AbortSignal.timeout(1500)` in the module
+  AND an explicit `timeout` on the hook wiring in both `hooks.json` and
+  `plugin.json`. A defence whose failure mode is "session hangs at start on 47
+  Macs" gets two.
+- **Fail open, always exit 0.** Telemetry never costs anyone a session.
+
+**Delivery is not "the request reached something."** `classifyDeliveryStatus` is
+a closed, default-deny mapping and the single authority for it: 2xx =
+`delivered`, 400 = `rejected` (the server read our bytes and refused them, so
+retrying today is pointless and the slot stays claimed — the machine then shows
+SILENT in the fleet report, which is the loud direction), everything else =
+`not_delivered`. The rule it replaced was `status < 500`, which counted a
+platform **404** — the route not deployed yet, i.e. exactly the state on a day a
+plugin release lands ahead of the server one — as a stored record, burning that
+machine's one daily slot forever with nothing able to notice. An outcome we
+cannot read gives the day BACK.
+
+**Freshness is NOT recomputed here** — it is the SAME verdict the local nag
+renders, imported from `check-plugin-freshness.mjs`, so the two hooks can never
+disagree. One known divergence, stated rather than hidden: the nag honors
+`CLAUDE_CONFIG_DIR` and this module cannot (one env var, no others), so on a
+relocated-config machine the reported state degrades toward `unknown`, never
+toward `current`.
+
+**Throttle failure direction:** an unwritable stamp file means every session
+POSTs. That is bounded and correct — a rate limiter that cannot write must not
+become a suppressor.
+
+**Kill switch:** `MOTHY_PLUGIN_HEARTBEAT=0` (also `off`/`false`/`no`; default
+ON). Off means the hook returns immediately: no file written, no request, no id
+minted. Guards: `tests/plugin-heartbeat-hook.test.mjs`,
+`tests/plugin-heartbeat-contract-parity.test.mjs` (proves the client's email
+grammar is a SUBSET of the server's, so we never POST a 400 forever; skips when
+the sibling `mothy-mcp` checkout is absent), and
+`tests/integration/plugin-heartbeat-nonblocking.test.mjs` (the abort path
+against a real blackhole socket and an unresolvable host).
+
+**The server half lives in `mothy-mcp`** (`api/plugin-heartbeat.mjs` +
+`lib/plugin-fleet-state.mjs`) — a separate private repo with its own deploy.
+That is why the email grammar is a deliberate COPY here rather than an import:
+there is no shared package a public plugin on ~47 machines could pull.
 
 ## Run / test / publish
 
