@@ -12,3 +12,8 @@
 
 # Logs
 *.log
+
+# Generated Organization Skills upload (node scripts/build-org-bundle.mjs).
+# Never committed: the plugin skills are the source of truth, this is a build
+# product, and a checked-in copy is one more thing that can go stale.
+dist/

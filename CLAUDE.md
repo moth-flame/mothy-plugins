@@ -45,6 +45,49 @@ Mothy is two cooperating surfaces — never confuse them
 > points the user at the local command. Edits flow **plugin → playbook, never
 > the reverse.** When they disagree, the plugin `SKILL.md` wins.
 
+## Two DELIVERY surfaces: the plugin and Organization Skills
+
+Claude Code loads the skills from **this plugin**. Chat and Cowork load them as
+**Organization Skills** — a separate upload, because plugin installs lag (this
+repo ships `check-plugin-freshness.mjs` precisely because a machine once ran
+0.7.0 against a repo at 0.16.0 for weeks).
+
+**The org copies are GENERATED, never hand-written:**
+
+```
+node scripts/build-org-bundle.mjs      # → dist/org-skills/ (gitignored)
+```
+
+Upload that directory. **Never edit a skill in the org UI** — the next sync
+overwrites it, and nothing in `tests/` can see it, so the drift is invisible in
+the one moment it matters: the org copy runs, misbehaves, and looks exactly like
+the plugin working.
+
+**The bundle is a deliberate subset, pinned by `tests/org-bundle.test.mjs`.**
+The org surface has no hooks, no command shims, no repo and no local binaries,
+so `video`/`article`/`video-setup` (Playwright, ffmpeg, ElevenLabs),
+`build`/`fix`/`test`/`audit` (a runnable suite, a checkout to cite `file:line`
+from) and `connect`/`dev-setup`/`update-skills` (the CLI surface itself) stay
+plugin-only. `EXCLUDED` in the script states the reason for each.
+
+**Two skills ship as SURFACE VARIANTS** rather than being excluded, because the
+discipline in them is worth *more* where there is no safety net:
+
+- **`proceed`** — keeps park/resume; the "It is automatic (installed with this
+  plugin)" section is replaced by an explicit *no automatic capture here*. Left
+  verbatim, that section promises three PreCompact hooks and a
+  `.claude/precompact-state.md` that cannot exist on that surface. That is the
+  freshness bug class exactly: an assistant believed a stale sentence and never
+  opened a correct snapshot on disk.
+- **`plan`** — keeps independent role passes, the conformance cross-check and
+  synthesis; drops the desktop preflight (a repo STOP is wrong for a non-code
+  plan) and the Workflow boilerplate, per its own §0.3 sequential fallback.
+
+**Anchors are strict, and that is the load-bearing part.** Each cut asserts its
+anchor appears exactly once and throws otherwise. Rename a heading in a plugin
+skill and the BUILD fails; a forgiving builder would emit a variant that still
+carries the hook promise, the upload would look fine, and the lie would be back.
+
 ## Layout
 
 - `.claude-plugin/marketplace.json` — marketplace manifest (one plugin: `mothy`).
