@@ -220,6 +220,63 @@ at a dedicated eval twin instead can save an order of magnitude more than any
 model swap. Give that twin EMPTY fallbacks, so an eval fails loud rather than
 silently switching models mid-battery.
 
+## §0.7 — Confirm the target is deployed before planning work to harden it
+
+A plan often exists to strengthen something that already exists: a patch, a guard,
+a scheduled job, a feature flag, a monitor, a migration. All of that work is worth
+exactly zero if the thing is not actually running where it is supposed to run.
+
+**Measured on a real multi-run build.** A sixteen-unit plan spent its whole budget
+hardening a security fence — writing guards, closing review findings, proving
+mutations across four rounds of rework — and only at the very end did triage of an
+unrelated alert reveal that the mechanism had been reverted by a platform upgrade
+and was not active in production at all. Every unit passed. Every gate cleared.
+Nothing in the planning phase had ever asked whether the target was live.
+
+**The rule.** If the plan's value depends on an existing mechanism being LIVE, the
+plan carries a **measured deployment check** for that mechanism BEFORE the units
+that harden it are scheduled — the command that was run, and what it returned.
+
+- **List the dependencies in the brief** (Protocol 3): every existing mechanism
+  this plan's value rests on. An empty list is a claim, and a checkable one.
+- **Measure, don't cite.** "The config declares it", "the installer applies it",
+  "the changelog says it shipped" are facts about a file. The question is what the
+  running system does — query the deployment, the process, the row, the endpoint.
+  What you checked has to be what decides.
+- **Unreadable is not deployed.** "Could not tell" and "checked, it is live" are
+  different answers. An unreadable check is an open question in the plan, never a
+  silent pass.
+- **An inert target re-orders the plan.** If the mechanism is not live, the first
+  unit is making it live; the hardening units come after. Guards on something
+  inert guard nothing, and the suite goes green regardless.
+- **Put the check in the plan artifact**, so whoever executes the plan can see the
+  target was live rather than assumed live.
+
+## §0.8 — Read version and provenance facts from the tree the change lives in
+
+**Measured on the same build.** A version-pinned constant was read from the main
+checkout and used to dismiss a review finding as a false positive. The unit's own
+working tree held a different value. The dismissal was a confident answer to the
+wrong question and had to be retracted in writing, after rework rounds had already
+been spent on it.
+
+**The rule.** When a plan, a synthesis or a review turns on a pinned version, a
+target commit, a config constant, a lockfile pin or any similar provenance fact,
+read it from the **working tree the change actually lives in** — the branch under
+review, the worktree a unit runs in, the checkout being deployed — and **name the
+tree you read**.
+
+- **Quote path and value together**, never the value alone. An unattributed value
+  is indistinguishable from a correct one.
+- **A fact from the wrong tree is not a weaker fact, it is a DIFFERENT fact.** It
+  arrives at full confidence pointing the wrong way, which is why it deserves a
+  line of ceremony rather than ordinary care.
+- **Parallel branches or worktrees make this the default failure**, not an edge
+  case: "the repo" is ambiguous the moment more than one tree is checked out, and
+  the open one wins by accident.
+- **If the deciding tree cannot be read from here, that is a finding** — not a
+  license to substitute the tree that can.
+
 ## Blocking decisions go in a question widget (MANDATORY)
 
 When this skill is genuinely blocked on a decision that is the user's to make, ask
@@ -508,6 +565,8 @@ state (§0.3) before doing anything else — the run is detached and resumable.
 - **Don't dump raw plans on the user.** The synthesis is the deliverable; mention specific dissents and gaps inline.
 - **Skip if the task is trivial.** A single file read, a factual question, a status check — answer inline. A squad is for design-level decisions.
 - **Include an eval gate when the plan touches an LLM call** (§0.6) — ground truth independent of the system under test, thresholds fixed before the run.
+- **Confirm the target is deployed (§0.7).** If the plan hardens something that already exists, record a measured deployment check for it — the command and its output — before scheduling the units that harden it. Unreadable is not deployed.
+- **Provenance from the tree that decides (§0.8).** Pinned versions, target commits and config constants are read from the working tree the change lives in, and the tree is named alongside the value.
 - **Plans stop at planning.** A plan does not commit, push, deploy, or migrate. Execution is /build, and it commits locally and asks before pushing.
 - **Durable where possible (§0.3).** Persist the ask, the decisions, and the resume pointer; degrade to working notes when the repo has no planning-doc convention.
 
@@ -521,6 +580,8 @@ state (§0.3) before doing anything else — the run is detached and resumable.
 - **Naming a test command the repo doesn't have**, so every downstream step is unrunnable.
 - **Writing the plan into a directory convention the repo doesn't use**, or refusing to plan because `CLAUDE.md` / `AGENTS.md` is missing.
 - Estimating in days/hours/weeks instead of complexity points.
+- Scheduling units to harden a mechanism nobody confirmed is running — guards land, gates clear, the suite goes green, and none of it is in force.
+- Reading a pinned version or config constant from whichever checkout happens to be open, then deciding a finding on it.
 ## Operate from the Product First Principles
 
 When planning product work, read `${CLAUDE_PLUGIN_ROOT}/docs/product-first-principles.md`
