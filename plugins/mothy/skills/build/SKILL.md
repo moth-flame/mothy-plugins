@@ -483,6 +483,42 @@ covered. A later mutation drill gutted BOTH new guards to `return true` and the
 old test still passed 11/11. A test that guarded nothing, on the code path that
 writes conversation logs keyed by user email.
 
+**A plan-invalidating finding halts dispatch.** Most findings are UNIT-LOCAL:
+fix them inside the unit and keep the loop running. Some are not, and the loop
+cannot see it, because each unit only ever looks at itself. Treat a finding as
+**PLAN-INVALIDATING** when it shows any of:
+
+- **(a)** another unit's acceptance criterion, quality gate, or marker/check set
+  is insufficient or wrong;
+- **(b)** the plan's premise for some unit is false — a unit that INVERTS or
+  contradicts its own stated acceptance criterion is this case;
+- **(c)** a real dependency exists that the plan never declared — especially one
+  whose absence lets a later unit run too early;
+- **(d)** a measured fact about the environment contradicts an assumption the
+  plan was written against.
+
+When one appears: **stop dispatching every unit that depends on the invalidated
+design**, re-read the plan, AMEND it in writing — say WHICH other units the
+finding affects, by unit id — and then do the half that actually binds:
+**encode the new dependency in the SCHEDULER**, meaning whatever really decides
+what runs next (the dependency graph, the run ordering, the queue). A dependency
+written only into a plan document does not bind the next dispatch; the scheduler
+does not read prose.
+
+Measured on a live 4-run build: one unit's verifier found that the three marker
+strings used to verify a security fix were BYTE-IDENTICAL between the fixed and
+the vulnerable version of that fix — the markers could not tell the two apart. A
+second unit's build gate was exactly "those three markers are present", and that
+unit did not declare the first as a dependency, so the scheduler considered it
+ready. Had it run, it would have built and published a release artifact that
+PASSED its own quality gate while still carrying the cross-user data-read bypass
+the whole plan existed to close. The finding was in one unit; the damage would
+have landed in another; nothing connected them. Three siblings showed up in the
+same build: a unit inverted its own acceptance criterion and merely logged the
+deviation; another unit's real dependency on a credential-durability fix was
+never declared; and an environment premise shifted so the auto-recovery path the
+plan designated structurally could not fire.
+
 ### 4.6. Verifier rubric (10 bug classes)
 
 Closed set. Findings without a `rubric_id` from this table are dropped by the
@@ -725,6 +761,7 @@ file, `git log` alone still carries the primary guarantee.
 | Build dispatched | Write the build-state file: base commit, resolved profile, unit graph (all `pending`), resume pointer if any |
 | Unit committed | `git commit` (the journal) + flip that unit to `committed <hash>` |
 | Unit escalated (3 rework rounds) | Mark `escalated <reason>`; do NOT commit; surface to the user |
+| Plan amended (plan-invalidating finding) | Record the amendment + the affected unit ids; update the dependency graph BEFORE the next dispatch |
 | Regression run | Record floor + green/failing state |
 | Resume | Read `git log` (+ the state file if kept); dispatch only units NOT already committed |
 
@@ -1069,6 +1106,7 @@ return { units: indepResults.flat(), regression, iteration, verdicts: unit_verdi
 - **Convergence check, not just a round bound (§4.5/§6).** Finding count per unit per round is tracked; a count that rises round-over-round escalates immediately. The 3-round cap stops a loop — it cannot see a unit getting worse.
 - **Rewrite voids prior resolutions (§4.5).** A fix agent declares `patch` or `rewrite`. A rewrite voids every previously-resolved finding on that unit — re-prove each against the new surface before marking it resolved again.
 - **Unverifiable-provenance findings go to the orchestrator (§4.5).** A finding resting on a fact outside `{diff, rubric, types}` is raised as `provenance unverifiable from my inputs — orchestrator to confirm` and settled by an orchestrator read, never dispatched to a fix agent as a defect. Verifier isolation is UNCHANGED — the remedy is a finding class, never extra context.
+- **A plan-invalidating finding halts dispatch (§4.5).** A finding that impeaches another unit's gate or marker set, a plan premise, an undeclared dependency, or an environment assumption is not unit-local. Stop dispatching everything downstream of the invalidated design, amend the plan in writing naming the affected unit ids, and encode the new dependency in the scheduler — a prose-only amendment does not bind the next dispatch.
 - **Same-commit rule.** Test + impl + write-up land together. No splitting across commits.
 - **No bypass.** No `--no-verify`, `--amend`, `--force`, `git add -A`. Pre-commit hook failure = fix the underlying issue, re-stage, new commit.
 - **Commit locally; ask before pushing** (§8). Follow the repo's conventions; default to stopping at the local commit unless the user has said otherwise.
@@ -1093,6 +1131,8 @@ return { units: indepResults.flat(), regression, iteration, verdicts: unit_verdi
 - **Marking a finding resolved after a REWRITE because it was resolved before the rewrite** — the earlier fix covered code that no longer exists. Re-prove it against the new surface.
 - **Spending the third round on a unit whose finding count went UP** — the round bound is not a convergence check. A rising count escalates now.
 - **Handing a fix agent a finding the verifier could not have verified** — a pinned version / target commit / out-of-diff constant is an orchestrator read, not a defect. Loosening isolation to "help" the verifier is the bias path.
+- **Fixing a plan-invalidating finding inside the unit that found it and carrying on.** A finding that impeaches another unit's marker set, gate, or premise lands its damage elsewhere — found in one unit, shipped from another, with nothing in the loop connecting them.
+- **Amending the plan but leaving the dependency graph alone.** The scheduler does not read prose. An unencoded dependency lets the downstream unit run anyway, on schedule, passing its own gate.
 - **Skipping the verifier on a unit because "the test passes"** — that's exactly the failure mode the verifier exists to catch.
 - **Letting the verifier raise stylistic complaints without a `rubric_id`** — drop them at the harness. Closed-set rubric only.
 - **Asserting what the code does, not what the spec requires (T-02)** — reading the expected value out of the implementation blesses every bug as correct.
