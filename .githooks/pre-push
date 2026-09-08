@@ -1,31 +1,90 @@
 #!/usr/bin/env bash
 #
-# pre-push — this repo's portable gate.
+# pre-push — this repo's portable gate. TWO legs, both blocking.
 #
-# This runs exactly the tests CI (`validate.yml`) runs, so a red push here is a
-# red CI run you have not waited for yet. There is no root package.json on
-# purpose — the node test runner is the whole harness.
+#   leg 1  secret scan   — the SAME gitleaks command .github/workflows/secret-scan.yml runs
+#   leg 2  manifest/tests — the SAME node command   .github/workflows/validate.yml    runs
+#
+# WHY LEG 1 EXISTS. `main` here is branch-protected (PR + `test` status check),
+# but an ADMIN PUSH BYPASSES BOTH — and three did on 2026-09-07 (8d45120,
+# c0db423a, 08491a9d). Nothing leaked (all three were skill markdown), but on a
+# PUBLIC repo the secret scan is the control that proves that, and it never ran.
+# Rich's ruling: "No one looks at PRs. We need rule based safeguards." So the
+# scan moved LOCAL, where no server-side bypass can reach it.
+#
+# The fix is deliberately NOT `enforce_admins` / required PRs. That would force
+# PRs nobody reads and park every plugin change; the branch-protection settings
+# are unchanged.
+#
+# THE COMMANDS ARE COPIED FROM CI ON PURPOSE — SAME FLAGS, SAME CONFIG FILE.
+# A hook that scans "roughly what CI scans" is a second, drifting implementation
+# of the control, and the drift is invisible until the day it matters.
+#
+# WHY FULL HISTORY, NOT JUST THE PUSHED RANGE. `gitleaks detect` with no
+# --log-opts scans the whole local history, which is a strict SUPERSET of the
+# commits being pushed (they are already committed locally when this fires) and
+# is byte-identical to the CI invocation. Measured 2026-09-08: 74 commits,
+# 1.16 MB, 1.19s. A range form would be cheaper, buy nothing at this size, and
+# add edge cases (new branch, all-zero remote sha, deletes) that each fail in
+# the quiet direction.
+#
+# AN UNRUNNABLE SCANNER MUST NEVER EXIT 0. A missing gitleaks that "passes" logs
+# exactly like coverage while checking nothing — the precise failure this hook
+# exists to prevent. Missing binary and missing config are both HARD FAILURES.
+#
+# THE SANCTIONED ESCAPE HATCH IS `.gitleaks.toml` — an allowlist entry, in the
+# repo, reviewable. There is no env override and no bypass flag, by design.
+# Do NOT use --no-verify; it is forbidden by repo rule.
+#
+# TRACKED ON PURPOSE. A hook under .git/hooks is never cloned. This one rides
+# the checkout, and `core.hooksPath` is what points git at it — set by
+# scripts/install-hooks.sh, or by the plugin's own SessionStart hook
+# (plugins/mothy/hooks/arm-push-gate.mjs), or by hand:
+#   git config core.hooksPath .githooks
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+# ── leg 1: secret scan ─────────────────────────────────────────────────────
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-push: FAIL — cannot scan: gitleaks is not installed or not on PATH." >&2
+  echo "  This repo is PUBLIC. A push is not allowed without the secret scan running;" >&2
+  echo "  a scanner that cannot run must never report a pass." >&2
+  echo "  Install it:  brew install gitleaks   (CI pins 8.30.1)" >&2
+  exit 1
+fi
+
+if [ ! -f "$ROOT/.gitleaks.toml" ]; then
+  echo "pre-push: FAIL — cannot scan: .gitleaks.toml is missing." >&2
+  echo "  Scanning without this repo's own config is a WEAKER check than CI runs," >&2
+  echo "  so it is refused rather than silently downgraded." >&2
+  exit 1
+fi
+
+echo "pre-push: gitleaks detect --config .gitleaks.toml --no-banner --redact --exit-code 1"
+if ! gitleaks detect --config .gitleaks.toml --no-banner --redact --exit-code 1; then
+  echo "pre-push: BLOCKED — gitleaks flagged a potential secret (finding shown above, redacted)." >&2
+  echo "  This repo is PUBLIC. Do NOT push. Rewrite the commit to remove the value and" >&2
+  echo "  ROTATE it — a secret that reached a local commit is already out of your hands" >&2
+  echo "  the moment anyone else fetches it." >&2
+  echo "  If it is a false positive, add an allowlist entry to .gitleaks.toml as its own" >&2
+  echo "  clearly-explained commit. That is the only sanctioned escape hatch; --no-verify" >&2
+  echo "  is forbidden by repo rule." >&2
+  exit 1
+fi
+
+# ── leg 2: manifest / plugin tests ─────────────────────────────────────────
 #
 # `--test-reporter=dot` only changes the OUTPUT, never which tests run: ~300 TAP
 # lines become ~5, and failures still print in full at the end. It matters
 # because this hook usually fires inside an agent session, where every one of
 # those lines is context that gets re-sent on every later turn. CI keeps the
 # default reporter — its logs are read by a person, and cost nothing to a model.
-#
-# Do NOT use --no-verify. If this is failing, the tests are telling you
-# something; fix the code, or change the test as its own clearly-explained step.
-#
-# TRACKED ON PURPOSE. A hook under .git/hooks is never cloned. This one rides
-# the checkout, and `core.hooksPath` is what points git at it — set by the
-# plugin's own SessionStart hook (plugins/mothy/hooks/arm-push-gate.mjs), or by
-# hand:  git config core.hooksPath .githooks
-set -euo pipefail
-
-ROOT="$(git rev-parse --show-toplevel)"
-cd "$ROOT"
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "pre-push: node not found — cannot run the test gate. Install node or fix PATH." >&2
+  echo "pre-push: FAIL — node not found; cannot run the test gate. Install node or fix PATH." >&2
   exit 1
 fi
 
