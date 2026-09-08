@@ -251,6 +251,53 @@ silently switching models mid-battery.
 The isolated impl-verifier never sees the eval or its fixtures — same reason it
 never sees the test file.
 
+## §0.7 — Durable current state (MANDATORY whenever a build spans more than one dispatch)
+
+§0.3 makes a build RESUMABLE. It does not make the build's state READABLE by
+whoever dispatches next, and that is a separate failure. Measured on a real
+16-unit build: the build-state document was written and updated all day and was
+never pushed, so it existed only in one local checkout hundreds of commits
+behind the remote. The orchestrator then re-dispatched a twelve-hour build step
+for an artifact that had been built, verified and published minutes earlier.
+
+**1. One CURRENT-STATE file per build, REWRITTEN rather than appended.** The
+§0.3 build-state file is that file — and any build long enough to span a
+disconnect or a second dispatch should keep one. It is a statement of present
+truth, not a narrative and not a log. Each rewrite answers: what is built, what
+is deployed, what has been MEASURED (the command AND its output, never a
+claim), what is next, and which earlier claims are now RETRACTED. Never append
+a fresh "update" block below a stale one: two answers to "what is true now" is
+the same as none.
+
+If the run also keeps an append-only ledger or checkpoint log, keep it exactly
+as it is — the two are complements and neither substitutes for the other. **The
+ledger records WHAT HAPPENED** (append-only, ordered, never rewritten). **The
+state file records WHAT IS TRUE NOW** (rewritten in place, never appended). The
+loss above is what happens when only the first exists: the evidence *was* in
+the ledger, and nobody read it, because "is this already built?" is a
+current-state question that appending more often can never answer.
+
+**2. Making the state durable is part of a unit's definition of done.** Commit
+the state file in the same commit as the unit's code where possible; when the
+state changes after that commit, commit it immediately, never "at the end".
+Pushing still follows §8 — default to commit-and-stop and **ask before
+pushing** — but once the user has authorized pushing, a unit is not done until
+the remote carries its state, because a state file that never leaves one
+checkout is invisible to the next dispatch.
+
+**Verify a push by reading the file back FROM THE PUSHED REF, never by the
+push's exit status.** `git fetch && git cat-file -e <remote>/<branch>:<path>`,
+not `echo $?`. A push can report success and land nothing.
+
+**3. Reading the state file is a PRECONDITION for dispatching a unit.** Before
+spawning ANY agent, read the current-state file **from the remote** —
+`git fetch && git show <remote>/<branch>:<path>` — and confirm the work is not
+already done. Not from the working tree: a stale checkout is exactly how the
+loss above happened, repeatedly, and a working-tree read of a file that never
+landed is byte-identical to a read of a current one. This sits ALONGSIDE the
+§10 `git log` check, never instead of it — `git log` proves a COMMIT exists,
+the state file proves an EFFECT does (built, published, deployed).
+
 ## Blocking decisions go in a question widget (MANDATORY)
 
 When this skill is genuinely blocked on a decision that is the user's to make, ask
