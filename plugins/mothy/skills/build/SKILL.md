@@ -443,6 +443,22 @@ extra context to help the verifier understand — stop; that is the bias path.
 Re-design the rubric instead. **The isolation holds in the sequential fallback
 too** (§0.3): run the verification pass against `{diff, rubric, types}` only.
 
+**Isolation is a HARD RULE and nothing below relaxes it.** `{diff, rubric,
+types}` stays the complete input list. When a finding turns out wrong, the
+remedy is a finding CLASS, never extra verifier context.
+
+**Unverifiable-provenance findings — route to the ORCHESTRATOR, not the fix
+agent.** Isolation creates one specific false-positive class: a finding that
+rests on a fact the verifier structurally CANNOT see — a pinned dependency
+version, a target commit, a config constant living outside the diff. The
+verifier raises those as `provenance unverifiable from my inputs — orchestrator
+to confirm`, never as an asserted defect. They route to the orchestrator, who
+settles them with one read of the real file; only a CONFIRMED finding becomes a
+defect and reaches a fix agent, and an unconfirmed one does not consume a rework
+round. Measured: a verifier reported a real-looking contradiction between two
+version claims; it dissolved the moment the pinned version constant was actually
+read — after several fix rounds had already been spent on it.
+
 Verifier returns `AdversarialVerdictSchema`. For each rubric item:
 `{ rubric_id, verdict: "pass" | "fail" | "n/a", evidence, severity }`. Severity:
 `critical` (data loss / auth break) · `high` (silent failure / wrong result for
@@ -452,6 +468,20 @@ a common input) · `medium` (edge case) · `low` (style).
 - All `pass` / `n/a` at severity ≥ high → unit advances to commit
 - Any `fail` at severity ≥ high → re-run the build agent with findings + diff + rubric (not the test). Re-run the verifier. **Bounded at 3 rework rounds.**
 - After 3 rounds with unresolved high+ findings: **ESCALATE to the user. DO NOT commit.**
+- **Convergence check, not just a round bound.** Record the verifier's finding COUNT per unit per round. If it INCREASES round-over-round on the same unit, stop and escalate immediately — do not spend the remaining round. A round cap stops a loop; it cannot see a unit getting worse. Measured: one unit went from 2 findings to 8 on a single patch file across rounds while the round bound happily allowed more.
+
+**Rewrite voids prior resolutions.** Every fix agent DECLARES which it did —
+`patch` (edited the existing surface) or `rewrite` (replaced the code under
+test). On a **rewrite**, every finding previously marked resolved on that unit is
+VOID: the earlier fix covered code that no longer exists, so each one is
+re-proven against the NEW surface before it may be marked resolved again. Carry
+the resolved-findings list into the next verifier round instead of trusting it.
+
+Measured: one unit closed a finding in rounds 2 and 3; round 4 replaced imported
+type guards with locally-defined ones — new surface the earlier fix never
+covered. A later mutation drill gutted BOTH new guards to `return true` and the
+old test still passed 11/11. A test that guarded nothing, on the code path that
+writes conversation logs keyed by user email.
 
 ### 4.6. Verifier rubric (10 bug classes)
 
@@ -540,6 +570,12 @@ until (
 
 On `iteration === 3` with unresolved findings: surface an escalation summary to
 the user. DO NOT commit.
+
+**Convergence check, not just a round bound (§4.5).** The real stop condition is
+`iteration < 3` AND a non-increasing finding count. Track the count per unit per
+round; a count that RISES round-over-round on the same unit escalates on the spot
+rather than spending another round — a rising count means the fix direction is
+wrong, and each further round only grows the diff to unpick.
 
 **Regression is floor-based, not zero-based (T-10).** Separate NEW failures from
 the pre-existing/environmental floor (a dependency missing locally, a
@@ -1030,6 +1066,9 @@ return { units: indepResults.flat(), regression, iteration, verdicts: unit_verdi
 - **LLM-call eval gate** (§0.6) when a unit touches a prompt/model/call parameters — real-model eval, ground truth independent of the system under test, thresholds fixed before the run.
 - **Conformance review before the commit (§6.6).** One more agent, labeled `conformance:` and never `verify:`, reads the original ask alongside the cumulative diff and asks the question the isolated verifier structurally cannot: is this what was asked for? Separate from the impl-verifier and the test-auditor, replacing neither. No veto — you triage its findings — but an unresolved `critical` one blocks the commit.
 - **Verifier veto is non-negotiable.** Unresolved high+ findings (impl R-rubric OR test T-rubric) after 3 rework rounds → escalate to the user. Do NOT commit through.
+- **Convergence check, not just a round bound (§4.5/§6).** Finding count per unit per round is tracked; a count that rises round-over-round escalates immediately. The 3-round cap stops a loop — it cannot see a unit getting worse.
+- **Rewrite voids prior resolutions (§4.5).** A fix agent declares `patch` or `rewrite`. A rewrite voids every previously-resolved finding on that unit — re-prove each against the new surface before marking it resolved again.
+- **Unverifiable-provenance findings go to the orchestrator (§4.5).** A finding resting on a fact outside `{diff, rubric, types}` is raised as `provenance unverifiable from my inputs — orchestrator to confirm` and settled by an orchestrator read, never dispatched to a fix agent as a defect. Verifier isolation is UNCHANGED — the remedy is a finding class, never extra context.
 - **Same-commit rule.** Test + impl + write-up land together. No splitting across commits.
 - **No bypass.** No `--no-verify`, `--amend`, `--force`, `git add -A`. Pre-commit hook failure = fix the underlying issue, re-stage, new commit.
 - **Commit locally; ask before pushing** (§8). Follow the repo's conventions; default to stopping at the local commit unless the user has said otherwise.
@@ -1051,6 +1090,9 @@ return { units: indepResults.flat(), regression, iteration, verdicts: unit_verdi
 - Editing protected files without surfacing first.
 - **Same agent writes the test AND adversarially verifies it** — different roles; the verifier must not see the test author's context.
 - **Verifier reads the test file** — self-preferential bias returns through the back door.
+- **Marking a finding resolved after a REWRITE because it was resolved before the rewrite** — the earlier fix covered code that no longer exists. Re-prove it against the new surface.
+- **Spending the third round on a unit whose finding count went UP** — the round bound is not a convergence check. A rising count escalates now.
+- **Handing a fix agent a finding the verifier could not have verified** — a pinned version / target commit / out-of-diff constant is an orchestrator read, not a defect. Loosening isolation to "help" the verifier is the bias path.
 - **Skipping the verifier on a unit because "the test passes"** — that's exactly the failure mode the verifier exists to catch.
 - **Letting the verifier raise stylistic complaints without a `rubric_id`** — drop them at the harness. Closed-set rubric only.
 - **Asserting what the code does, not what the spec requires (T-02)** — reading the expected value out of the implementation blesses every bug as correct.
