@@ -3,6 +3,12 @@
 The "which credential key goes where" reference for a new teammate. Every secret
 the Mothy skills touch, where it comes from, and what breaks if it's missing.
 
+> **Path A first.** Default `/video` (`video_make`) and demo-flow `/article`
+> (`article_make`) run on **Agent37** via the Mothy MCP connector. Those paths
+> need **no local** ElevenLabs / Vimeo / Zoho / demo-capture keys — secrets stay
+> on Agent37. The table below is for **Path B local specialist capture** and
+> machines that still use direct Zoho REST.
+
 > **Never commit a real secret value.** Everything below is a placeholder/name.
 > If you paste a real key into a file in this repo, you've made a mistake — back
 > it out and rotate the key.
@@ -27,30 +33,33 @@ session.
 
 | Secret | Env var (primary) | Fallback file | How to obtain | Scope / plan | Used by (skill · stage) | Failure symptom if missing (degrade behavior) |
 |---|---|---|---|---|---|---|
-| ElevenLabs API key | `ELEVENLABS_API_KEY` *(strip any surrounding quotes)* | `.env.local` | ElevenLabs dashboard → **Profile → API Keys** → create key | Any paid tier with TTS quota | **video** · voiceover generation | No voiceover. `/video` cannot synthesize narration — VO step fails; video render aborts or produces a silent draft. |
-| Vimeo access token | `VIMEO_ACCESS_TOKEN` | `~/.mothy/.state/vimeo-creds.json` | Vimeo dev portal → **My Apps** → generate a personal access token | **Vimeo Pro** + the **`upload`** scope (token must include upload) | **video** · publish/host · **article** · embed | Upload fails (or 403 on missing `upload` scope). `/video` can't host the asset; `/article` has no hosted video to embed at the top. |
-| Zoho client ID | `ZOHO_CLIENT_ID` | `~/.mothy/.state/zoho-creds.json` | Zoho API console → **Self-Client** app → Client ID | Self-Client; scopes: `Desk.articles.ALL,Desk.settings.ALL,Desk.basic.READ,Desk.search.READ` | **article** · auth (token mint) | No Zoho auth → no token. `/article` cannot create the Desk draft at all. |
-| Zoho client secret | `ZOHO_CLIENT_SECRET` | `~/.mothy/.state/zoho-creds.json` | Same Self-Client app → Client Secret | Self-Client (pairs with client ID) | **article** · auth (token mint) | Same as above — token mint fails, `/article` cannot publish the draft. |
-| Zoho refresh token | `ZOHO_REFRESH_TOKEN` | `~/.mothy/.state/zoho-creds.json` *(cached access token: `~/.mothy/.state/zoho-tokens.json`)* | Generate a grant token in the Self-Client console with the scopes above, then exchange it once for a refresh token | Self-Client; same scope set | **article** · auth (access-token refresh) | Access token can't be refreshed → `/article` Desk calls 401 after the cached token expires. |
-| CommandIQ demo-capture password | `COMMANDIQ_DEMO_CAPTURE_PASSWORD` | *(none — env only)* | Ask Rich / team admin for the shared demo-capture login password | Login for `demo-capture+vanguard@mothandflame.test` on `https://dev-commandiq.mothandflamevr.com` | **video** · demo capture (Playwright login) | Playwright can't log in to the demo app → no screen capture → `/video` (and the per-step artifacts `/article` consumes) can't be produced. **Never write the literal password into any file** — read it from the env var at runtime only. |
-| Supabase service-role key *(optional)* | `SUPABASE_SERVICE_ROLE_KEY` | `~/.mothy/.state/<file>.json` | Supabase project → **Settings → API → service_role** | Per-project service role | **video** · only flows that **seed** demo data | Only needed when a flow seeds data. If absent and a flow needs seeding, the seed step is skipped/fails; flows that don't seed are unaffected. |
-| Supabase DB URL *(optional)* | `SUPABASE_DB_URL` | `~/.mothy/.state/<file>.json` | Supabase project → **Settings → Database → Connection string** | Per-project Postgres connection | **video** · only flows that **seed** demo data | Same as above — required only for seeding flows; otherwise ignored. |
+| ElevenLabs API key | `ELEVENLABS_API_KEY` *(strip any surrounding quotes)* | `.env.local` | ElevenLabs dashboard → **Profile → API Keys** → create key | Any paid tier with TTS quota | **video Path B** · voiceover | Path B VO fails. **Path A `video_make` unaffected** (key lives on Agent37). |
+| Vimeo access token | `VIMEO_ACCESS_TOKEN` | `~/.mothy/.state/vimeo-creds.json` | Vimeo dev portal → **My Apps** → personal access token | **Vimeo Pro** + **`upload`** scope | **video Path B** · publish | Path B upload fails. **Path A unaffected.** |
+| Zoho client ID | `ZOHO_CLIENT_ID` | `~/.mothy/.state/zoho-creds.json` | Zoho API console → **Self-Client** | Self-Client; Desk article scopes | **specialist Zoho REST only** | Direct REST can't mint. **Path A `article_make` + Path B `zoho_kb_*` unaffected** (server-side Zoho). |
+| Zoho client secret | `ZOHO_CLIENT_SECRET` | `~/.mothy/.state/zoho-creds.json` | Same Self-Client app | Self-Client | specialist Zoho REST | Same as above. |
+| Zoho refresh token | `ZOHO_REFRESH_TOKEN` | `~/.mothy/.state/zoho-creds.json` *(cache: `zoho-tokens.json`)* | Self-Client grant → refresh token | Self-Client | specialist Zoho REST | Same as above. |
+| CommandIQ demo-capture password | `COMMANDIQ_DEMO_CAPTURE_PASSWORD` | *(none — env only)* | Ask Rich / team admin | Login for demo-capture user on dev app | **video Path B** · Playwright login | Path B can't log in. **Path A unaffected.** **Never write the literal password into any file.** |
+| Supabase service-role key *(optional)* | `SUPABASE_SERVICE_ROLE_KEY` | `~/.mothy/.state/<file>.json` | Supabase project → service_role | Per-project | **video Path B** · seeding flows only | Seed step fails; non-seed flows OK. |
+| Supabase DB URL *(optional)* | `SUPABASE_DB_URL` | `~/.mothy/.state/<file>.json` | Supabase connection string | Per-project | **video Path B** · seeding | Same as above. |
 
 ---
 
 ## Brokered via the Mothy MCP — NO local secret
 
-**Slack** and **Google Sheets** do **not** need any local credential. They are
-brokered through the **Mothy MCP** connector (org connector — you authenticate
-once via the connector, not via a key in this repo).
+**Slack**, **Google Sheets**, and **Path A video/article renders** do **not**
+need local ElevenLabs / Vimeo / Zoho credentials. Authenticate the **Mothy**
+org connector once (`/connect`).
 
+- **Path A video/article** — `video_make` / `article_make` / `render_status`
+  (Agent37 holds the secrets).
+- **Path B hand-authored KB** — `zoho_kb_categories` / `zoho_kb_article_create`
+  (server-side Zoho on mothy-mcp).
 - **Slack** — `#product_and_customer_success` (channel `C05T9FA39DE`) + DM.
 - **Google Sheets** — the **Demo Videos** tab in workbook
   `12MDZoe8QOjK-AYLRjUaiWRbFcblrdPVcmxzXJfvyhaE`.
 
-Do not create env vars or fallback files for these. If a Slack/Sheets action
-fails, it's a connector/permission issue (re-auth the Mothy connector), not a
-missing secret.
+Do not create env vars for these Path A / brokered paths. If they fail, it's a
+connector/Agent37/permission issue, not a missing laptop secret.
 
 ---
 

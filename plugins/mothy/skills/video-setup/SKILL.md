@@ -1,29 +1,36 @@
 ---
 name: video-setup
 description: >-
-  First-run credential check for the **/video** and **/article** skills — detect
-  which API keys / secrets are PRESENT vs MISSING (presence only; never read or
-  echo a token value), and for each missing one walk the user through getting it
-  set, one step at a time. Use this skill when:
+  First-run credential check for the **local Path B** `/video` and `/article`
+  specialist track — detect which API keys / secrets are PRESENT vs MISSING
+  (presence only; never read or echo a token value), and for each missing one
+  walk the user through getting it set, one step at a time. Use this skill when:
     - The user says "set up /video", "set up video credentials", "check my video
       credentials", "what keys does /video need", "video-setup", "/video-setup",
       "are my ElevenLabs / Vimeo / Zoho keys set up", or anything about getting
-      /video or /article ready to run.
-    - OR /video or /article reports a missing or failing credential and you need
-      to find out which key is absent and how to set it.
+      the **local** capture/publish path ready.
+    - OR Path B `/video` or specialist Zoho REST reports a missing credential.
+  **Not required for Path A** — the default remote Agent37 path
+  (`video_make` / `article_make`) needs no local ElevenLabs / Vimeo / Zoho keys.
   This is a PRESENCE-ONLY check — it confirms a key *exists*, never inspects or
-  prints its value. Pair with /video (make the demo video) and /article (publish
-  the Zoho KB article).
+  prints its value. Pair with /video Path B and specialist article publishing.
 ---
 
-# Video setup — first-run credential check for /video and /article
+# Video setup — first-run credential check for local Path B
 
-You're getting a teammate ready to run **/video** (record a narrated product
-demo) and **/article** (publish that demo as a Zoho Desk KB article). Those
-skills talk to a few outside services that each need a credential. This skill's
-only job is to **check whether each credential is present** and, for any that
-are missing, **walk the user through setting it — one step at a time, plain
-language**. Reassure liberally; this is normal first-time setup.
+You're getting a teammate ready for the **local specialist** `/video` Path B
+(Playwright + ElevenLabs + ffmpeg + Vimeo) or a machine that publishes Zoho via
+direct REST. **Most teammates should use Path A instead** — remote Agent37 via
+the Mothy connector (`video_make` / `article_make`) with **zero local API keys**.
+If they only want a demo video or demo-flow KB article, stop and point them at
+`/video` / `/article` Path A (and `/connect` if the connector is missing). Continue
+below only when they explicitly need offline/local capture or already chose Path B.
+
+Those Path B skills talk to a few outside services that each need a credential.
+This skill's only job is to **check whether each credential is present** and, for
+any that are missing, **walk the user through setting it — one step at a time,
+plain language**. Reassure liberally; this is normal first-time setup for the
+specialist track.
 
 ## The one rule that matters most: presence only, never the value
 
@@ -69,9 +76,12 @@ done
 Report a short table: each key → **PRESENT** or **MISSING**. Then handle the
 MISSING ones, one at a time.
 
-## The credentials /video and /article need
+## The credentials Path B /video and specialist Zoho REST need
 
-### ELEVENLABS_API_KEY — voiceover (used by /video)
+> **Path A reminder:** remote `video_make` / `article_make` need none of these
+> locally. Missing ElevenLabs / Vimeo / Zoho on the laptop must not block Path A.
+
+### ELEVENLABS_API_KEY — voiceover (Path B /video only)
 - **What it is:** ElevenLabs API key for text-to-speech narration.
 - **Where it comes from:** ElevenLabs dashboard → **Profile → API Keys**.
 - **How to set it:** export `ELEVENLABS_API_KEY` in their shell, **or** place it
@@ -79,7 +89,7 @@ MISSING ones, one at a time.
   the key — a quoted value will fail auth.
 - Tell them to paste the key into their **own shell / `.env.local`** — never here.
 
-### VIMEO_ACCESS_TOKEN — video hosting (used by /video; NON-BLOCKING)
+### VIMEO_ACCESS_TOKEN — video hosting (Path B /video; NON-BLOCKING)
 - **What it is:** Vimeo access token for uploading the finished MP4.
 - **Where it comes from:** Vimeo developer apps → generate a token. Requires a
   **Vimeo Pro** account and the **`upload`** scope on the token.
@@ -87,7 +97,11 @@ MISSING ones, one at a time.
   **`~/.mothy/.state/vimeo-creds.json`** (or under `$MOTHY_STATE_DIR`).
 - This one is **optional** — see the degrade-not-abort contract below.
 
-### ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET / ZOHO_REFRESH_TOKEN — KB publishing (used by /article)
+### ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET / ZOHO_REFRESH_TOKEN — specialist KB REST only
+
+> Default `/article` Path A (`article_make`) and Path B (`zoho_kb_article_create`)
+> use **server-side** Zoho — teammates do **not** need these local keys. Set them
+> only for direct REST on a machine that already runs that pipeline.
 - **What they are:** Zoho Self-Client OAuth credentials, used to publish the KB
   article as a **Draft** in Zoho Desk.
 - **Where they come from:** Zoho API console → create a **Self-Client**. The
@@ -100,7 +114,7 @@ MISSING ones, one at a time.
 - All three are needed together for /article to publish. Paste them into the
   shell / file privately — never into chat.
 
-### COMMANDIQ_DEMO_CAPTURE_PASSWORD — demo login (used by /video capture)
+### COMMANDIQ_DEMO_CAPTURE_PASSWORD — demo login (Path B /video capture)
 - **What it is:** the password for the shared demo-capture login that /video
   uses to drive the live app.
 - **How to set it:** export `COMMANDIQ_DEMO_CAPTURE_PASSWORD` in their shell at

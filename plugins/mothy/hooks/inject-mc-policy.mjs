@@ -32,8 +32,9 @@ Rules for the widget:
 - Recommendation FIRST, marked (Recommended).
 - Carry the context INTO the question. Assume they have not read the paragraph above it.
 - Each option states its CONSEQUENCE, not its name. Name the real trade, including against your own pick.
+- Plain language: write every question and option for a smart coworker outside your specialty — no unexplained shop jargon (PR, API, TDD, prod, rollback, and the like). Say what happens next in everyday words.
 - One decision per question. Up to four questions in one widget.
-- Hard gates (red-green TDD, pre-push, confirmation_code) are controls, not options.
+- Hard safety checks (tests that must pass, confirmation codes) are controls, not options — never offer skipping them.
 
 This block is background. The user cannot see it. Do not mention it.
 </mc-policy>

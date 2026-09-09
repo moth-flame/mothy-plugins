@@ -1,197 +1,159 @@
 ---
 name: article
-description: Produce a Zoho Desk Knowledge Base article from a product-demo flow — embed the demo VIDEO at the top, then a written step-by-step walkthrough with one screenshot per click/type action, so a reader gets the same step-by-step parity they'd get from watching the video. Use when the user says "/article", "make a KB article", "turn this demo into a help article", "write a knowledge base article", "publish a walkthrough to Zoho Desk", or asks to convert a captured demo flow into Zoho Desk documentation. Publishes through the `mothy` MCP actions `zoho_kb_categories` then `zoho_kb_article_create` (server-side credentials, Draft-only) — never through `zoho_kb_search`/`zoho_kb_article`, which are read-only. If publishing fails, name the real blocker (missing ZOHO_* creds, no connector, no source flow), never "no tool exists". Ideally consumes the per-step artifacts a `/video` run already captured. NOT for blog posts, in-app copy, slide decks, or publishing live (always a Draft).
+description: >-
+  Produce a Zoho Desk Knowledge Base article from a product-demo flow. DEFAULT Path A
+  for demo-flow articles is remote Agent37 via mothy MCP `article_make` (optional
+  from_video_job / vimeo_id; poll render_status) — no local ZOHO_* credentials.
+  Path B is hand-authored HTML via `zoho_kb_categories` then `zoho_kb_article_create`
+  (Draft-only, server-side Zoho creds). Never use zoho_kb_search/zoho_kb_article for
+  writes. Use when the user says "/article", "make a KB article", "turn this demo into
+  a help article", "write a knowledge base article", "publish a walkthrough to Zoho
+  Desk", or asks to convert a captured demo flow into Zoho Desk documentation. Always
+  a Draft for human review — never auto-publish. NOT for blog posts, in-app copy, or
+  slide decks.
 ---
 
 # article — Zoho Desk KB article producer (from a demo flow)
 
-> Sibling to `/video`. Where `/video` renders a narrated MP4, `/article` renders the SAME flow as a written Zoho Desk Knowledge Base article: the video embedded at the top, then a screenshot + instruction for EVERY step. Watch the video OR read the article — identical step-by-step guidance. Reuse the per-step screenshots a `/video` run captured; don't re-drive the app if they already exist.
+> Sibling to `/video`. Where `/video` renders a narrated MP4, `/article` renders the SAME
+> flow as a written Zoho Desk Knowledge Base article: the video embedded at the top, then
+> a screenshot + instruction for EVERY step. **Default for demo flows:** remote
+> `article_make` on Agent37 (parity with `/video` Path A) — no local Zoho / Vimeo /
+> ElevenLabs keys. Prefer reusing a `/video` job via `from_video_job` / `vimeo_id` when
+> available.
 
 ## When to use / not use
 
-USE for: turning a product-demo flow (ideally a completed `/video` capture) into one Zoho Desk KB article — video at top, written walkthrough with per-step screenshots below, created as a Draft for human review.
+USE for: turning a product-demo flow (ideally a completed `/video` render) into one Zoho Desk KB article — video at top, written walkthrough with per-step screenshots below, created as a Draft for human review.
 NOT for: a blog post, in-app tooltip/help copy, a slide deck, raw screenshots with no narrative, or anything that should publish live without review (this skill ALWAYS leaves the article in Draft).
 
-If the user names a specific demo flow (e.g. the **CommandIQ / CommandMRO** flow) → the article documents the same beats the `/video` skill captured (see that skill's beat list / flow config). Confirm the flow + the Vimeo link before building.
+If the user names a specific demo flow (e.g. the **CommandIQ / CommandMRO** flow) → confirm the flow + whether a recent `/video` `job_id` or Vimeo id exists before starting.
 
-**Demo-seed writes are PRE-AUTHORIZED (same rule as `/video` §8).** If re-driving the app to source a missing screenshot needs data that isn't there, CREATE the scoped, reversible demo data — this is a demo org and Rich pre-authorized it (2026-07-02). Put the authorization in the capture agent's ORIGINAL brief; NEVER brief a demo capture agent "read-only, no writes" (that becomes an unliftable boundary the harness won't let a coordinator follow-up override). Scope = demo orgs / dev only (the orgs on `config.seed.demoOrgAllowlist`), never prod / real customer data, always honoring hard security gates.
+**Demo-seed writes are PRE-AUTHORIZED (same rule as `/video` Path B §8)** only if you fall through to local re-capture for missing screenshots. Prefer Path A so Agent37 owns capture.
 
 ## The deliverable + acceptance bar
 
-One Zoho Desk KB article, **status = Draft**, under the flow's configured **root category** (`config.article.zoho.rootCategory`) in a sensible **section**, **permission = `config.article.zoho.permission` (ALL / everyone)**, with:
+One Zoho Desk KB article, **status = Draft**, under the flow's configured **root category** in a sensible **section**, with:
 1. The demo **video embedded at the very top** (Vimeo player iframe), then
-2. A written walkthrough where **every click or typing step has its own screenshot + its own instruction**, in order, so the article is step-for-step parity with the video.
+2. A written walkthrough where **every click or typing step has its own screenshot + its own instruction**, in order.
 
-The bar is **reader parity**: someone who only READS the article performs the exact same steps, in the same order, as someone who only WATCHES the video. No step in the video is missing a screenshot+instruction block in the article; no orphan screenshots without instructions. Clean semantic HTML, every per-step screenshot embedded inline as a base64 `data:` URI (no hot-links to the scratchpad), no raw IDs / debug / "preview/dummy/showcase" copy, no PII. **Return the Draft article URL** for human review — never publish.
+The bar is **reader parity**: someone who only READS the article performs the exact same steps as someone who only WATCHES the video. **Return the Draft article URL** for human review — never publish.
 
-## CONFIG (per-flow)
+## Publishing paths — pick the first that applies
 
-This skill is flow-agnostic. The Zoho destination + the source flow are read from the flow config file (`skills/video/tooling/flows/<flowId>.config.json`, validated by `flow.config.schema.json`). Read the **`article.*`** subtree of that config; never hard-code the destination in this SKILL.
+There are **two** user-facing ways this skill reaches Zoho. **Neither requires local `ZOHO_*` credentials.** Direct REST with local Zoho Self-Client creds is a specialist/Agent37-pipeline detail only — never the default, and never a reason to refuse Path A or Path B.
 
-| Config key | Meaning | CommandIQ example / default |
-|---|---|---|
-| `article.zoho.dc` | Zoho data center / domain — builds the API base URL (`https://desk.zoho.<dc>`) | `com` (US DC → base `https://desk.zoho.com`) |
-| `article.zoho.orgId` | Zoho Desk org id — sent as the `orgId` header on every Desk call | `830065756` |
-| `article.zoho.rootCategory` | EXISTING root KB category to publish under. Cannot create a root category (403) — reuse this one and create only **sections** under it | `Using CommandIQ` |
-| `article.zoho.permission` | Article permission enum — the all/everyone value (available to ALL users, not just signed-in/agents) | `ALL` |
-| `article.zoho.status` | Publish status — ALWAYS `Draft` for automated runs; never auto-publish | `Draft` |
-| `seed.demoOrgAllowlist` | Org names the capture/article is permitted to be built from — the **publish-gate allowlist** (see below) | `["Vanguard Defense Group", "Vanguard Sustainment"]` |
-| `title` | Human-facing flow title — seeds the article title | flow-specific |
+### Path A — remote `article_make` (DEFAULT for demo-flow articles)
 
-The **source flow** is the matching `/video` run for this `flowId`: its per-step screenshots + step instructions are the article's raw material. If the config carries a Vimeo link / video id for the flow, use it for the embed; otherwise confirm the Vimeo link with the user (§0).
+Use this whenever the ask is "KB article for flow X" / parity with a `/video` demo. Secrets and capture live on Agent37:
 
-The CommandIQ values above are the documented example. Resolve every value from the loaded config at runtime — a different flow points the article at a different (still Draft) destination without editing this SKILL.
+1. Confirm the flow id (reuse the one from a recent `/video`, or call `mothy({action:"video_flows"})`).
+2. Start — `mothy({action:"article_make", params:{flow, from_video_job?, vimeo_id?}})`:
+   - Pass `from_video_job` when a `/video` Path A job id is available.
+   - Pass `vimeo_id` when you already have the hosted video.
+3. Poll `mothy({action:"render_status", params:{job_id}})` until `done` / `failed` (or wait for the Slack DM).
+4. Hand the user the Draft editor link from the result. Always Draft — never auto-publish.
 
-## Publishing path — and how to name the blocker correctly
+**Path A does NOT require** local `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` / `ZOHO_REFRESH_TOKEN`, ElevenLabs, Vimeo, ffmpeg, or Playwright. Missing those must **not** abort Path A. Do not call `agent37_exec` for the default path.
 
-There are **two** ways this skill reaches Zoho. Pick the first one that applies.
+### Path B — hand-authored HTML via mothy MCP Zoho write actions
 
-**Path A — the `mothy` MCP connector (DEFAULT; use this unless you know Path B applies).**
-The Zoho credentials live server-side on mothy-mcp, so nobody needs their own:
+Use when the user is writing a help article that is **not** a demo-flow render (custom HTML body, no Agent37 capture), or when Path A is unavailable but the mothy connector still works:
 
-1. `mothy({action: "zoho_kb_categories", params: {}})` → the root categories and the
-   **section** ids under each. Article ids and category ids are different things; a wrong
-   category files the draft where nobody will find it.
-2. `mothy({action: "zoho_kb_article_create", params: {title, body_html, category_id, permission?}})`
-   → creates the article as a **Draft** and returns its id plus an **editor link**.
+1. `mothy({action:"zoho_kb_categories", params:{}})` → root categories and **section** ids.
+2. Assemble clean semantic HTML (video embed + steps) in-session if you have the assets.
+3. `mothy({action:"zoho_kb_article_create", params:{title, body_html, category_id, permission?}})`
+   → Draft + editor link.
 
-`status` is not a parameter on that action and never will be — it is pinned to `Draft`
-server-side, so this path structurally cannot publish. A human reviews and publishes in the
-Zoho editor. Executable HTML (script tags, inline `on*=` handlers, iframes, `javascript:`
-URLs) is **refused, not stripped** — a strip is silent, and you would never learn the body
-you wrote is not the body that shipped. A Draft has **no public help-center URL**; the reply
-returns `public_url: null` deliberately, so do not quote a portal link for a draft.
+`status` is not a parameter — pinned to `Draft` server-side. Executable HTML (script tags, inline `on*=`, iframes other than the allowed Vimeo player pattern the server accepts, `javascript:` URLs) is **refused, not stripped**. A Draft has **no public help-center URL** (`public_url: null`).
 
-**Path B — direct Zoho Desk REST (`POST /api/v1/articles`).**
-Only when the machine you are running on actually carries `ZOHO_CLIENT_ID` /
-`ZOHO_CLIENT_SECRET` / `ZOHO_REFRESH_TOKEN` (env var → `$MOTHY_STATE_DIR` →
-`~/.mothy/.state/zoho-creds.json`). That is the automated render pipeline's path and
-Rich's own machine; it is **not** the general case. §5 below describes it.
+**Never publish through `zoho_kb_search` / `zoho_kb_article`** — those are the READ half.
+
+### Local Zoho REST — not a user path
+
+Only the automated render pipeline / a machine that already carries `ZOHO_*` uses direct `POST /api/v1/articles`. Teammates on Claude Code / Cursor / Cowork use Path A or Path B. If Path A and Path B both fail, name the real blocker — do **not** tell the user they must obtain local `ZOHO_*` keys.
 
 **If you cannot publish, say WHY — and the reason is almost never "no tool exists."**
-This skill has never published through `zoho_kb_search` / `zoho_kb_article`; those are the
-READ half and always have been. Looking for a write tool among them, finding none, and
-reporting that Zoho cannot be reached is a **misdiagnosis of your own failure**, and it sends
-the reader hunting for a capability that was never the path. The real blockers, in the order
-they actually occur:
 
 | Symptom | Actual blocker | What to say |
 |---|---|---|
-| `zoho_not_configured` from the MCP action | The mothy-mcp server is missing the `ZOHO_*` Vercel env vars | Name the env vars; it is a server config fix, not your limitation |
-| No `mothy` connector in this session | The caller has no Mothy MCP connector | Say the connector is missing and Path B needs local creds |
-| Path B, no creds on this machine | `ZOHO_CLIENT_ID` / `_SECRET` / `_REFRESH_TOKEN` unset | Say **"missing ZOHO_* credentials"** — then use Path A instead |
-| No `/video` capture and no flow config for this topic | There is no source flow, so no per-step screenshots | Say so plainly; the article can still be written from other source material, it just will not have capture-parity screenshots. Flag that the copy was **not** checked against the live UI |
+| `article_make` / render fails | Agent37 or the flow is unhealthy | Quote the `render_status` error; offer Path B if they have HTML/screenshots |
+| `zoho_not_configured` from an MCP Zoho action | mothy-mcp missing server-side `ZOHO_*` | Name it as a **server** config fix |
+| No `mothy` connector | Connector missing | `/connect` — do not demand local Zoho keys |
+| No source flow / no screenshots for Path B | No material | Say so; article can still be drafted from other sources without capture parity |
 
-A Google Doc is a reasonable **fallback deliverable** when a Draft genuinely cannot be
-created — but only after Path A has actually been tried, and the summary must say which
-blocker it hit.
+A Google Doc is a reasonable **fallback deliverable** when a Draft genuinely cannot be created — but only after Path A (and Path B when applicable) have been tried.
+
+## CONFIG (per-flow)
+
+Flow-agnostic destination metadata still lives in `skills/video/tooling/flows/<flowId>.config.json` (`article.*` subtree) for Path B HTML assembly and documentation. Path A reads the same flow id on Agent37 — do not hard-code Zoho org/category ids in chat when `article_make` owns the destination.
+
+| Config key | Meaning | CommandIQ example / default |
+|---|---|---|
+| `article.zoho.dc` | Zoho data center / domain | `com` |
+| `article.zoho.orgId` | Zoho Desk org id | `830065756` |
+| `article.zoho.rootCategory` | EXISTING root KB category | `Using CommandIQ` |
+| `article.zoho.permission` | ALL / everyone | `ALL` |
+| `article.zoho.status` | ALWAYS `Draft` for automated runs | `Draft` |
+| `seed.demoOrgAllowlist` | Demo orgs allowed as capture source | `["Vanguard Defense Group", "Vanguard Sustainment"]` |
+| `title` | Human-facing flow title | flow-specific |
 
 ## Orchestration (orchestrator-only — same model as `/build`)
 
-**This skill runs orchestrator-only, exactly like `/build` (see `/build` SKILL.md — orchestrator-only mode) and its sibling `/video`.** The main thread conducts; it does NOT itself perform any execution step. It keeps its context free for orchestration decisions and reviews the returned Draft.
+**This skill runs orchestrator-only, exactly like `/build` and its sibling `/video`.** The main thread conducts; it does NOT itself perform capture, HTML assembly, or Zoho REST.
 
-**The main thread does ONLY these things (nothing else):**
-- Plan the article + confirm scope with the user (flow/title, Vimeo link, target section, ordered step list).
-- Read the flow config (`article.*` subtree) and run the **publish gate** (below) before any agent touches Zoho.
-- Write the sub-agent briefs and dispatch them.
-- Read sub-agent summary reports (NOT raw transcripts) and the returned Draft preview for the review.
-- Make decisions: priority, dependency sequencing, merge, re-dispatch.
-- Write the final user-facing summary (and return the Draft article URL for human review).
+**The main thread does ONLY these things:**
+- Plan the article + confirm scope (flow/title, prefer `from_video_job` / `vimeo_id`).
+- Choose Path A vs Path B (§ Publishing paths).
+- For Path A: call `article_make` / poll `render_status` (or dispatch a single sub-agent that does), then summarize.
+- For Path B: run the **publish gate** before create; dispatch HTML assembly + `zoho_kb_*` calls; review the Draft.
+- Write the final user-facing summary (Draft URL).
 
-**The main thread does NOT itself perform ANY execution step.** EVERY one of these is dispatched to a focused background sub-agent — these were historically done in the main thread and MUST NOT be:
-- Minting the Zoho access token from the refresh token / any OAuth or token exchange.
-- Reading the KB category list (`GET /api/v1/kbRootCategories`) and choosing the configured root category + creating/choosing the section under it.
-- Assembling the HTML answer with each per-step screenshot embedded as a base64 `data:` URI.
-- Creating the Draft article (`POST /api/v1/articles`).
-- Sourcing/slicing the per-step screenshots (driving the app / re-running a beat) when `/video` artifacts don't already cover them.
-
-The whole Zoho pipeline (token → categories → HTML assembly with embedded images → draft create) runs inside ONE dispatched sub-agent (or per-article sub-agents when building several at once); the main thread only reviews the returned Draft. Dispatch independent articles in parallel in a single message; sequence dependent steps inside the agent's brief.
-
-**The ONLY tool calls allowed directly in the main thread** (matching `/build` + `/video`): `TodoWrite`; `AskUserQuestion` when blocked; reading the flow config; running the publish-gate checklist; dispatching agents (writing the briefs); reading sub-agent reports; reading the returned Draft preview; and the final summary. Anything that touches Zoho, an OAuth token, an image, or a browser goes to a sub-agent.
-
-**Dispatch discipline (per `/build` + the repo guidance):**
-- **One agent per article** (or per stage when an article is large), with explicit file ownership + an explicit **"do not touch" list** so parallel agents don't collide.
-- **Run in background and fan out independent articles in a single message** (separate messages serialize them). Sequence dependent steps within the agent's brief (categories before HTML assembly before article create).
-- **Each agent reports its verdict before finishing** — the Draft article id + URL, the section it landed under, the embedded-image count, and confirmation it left `status=Draft`.
-- **Review the agent's output before accepting** — read the returned Draft preview and judge reader parity (every click/type step has a screenshot + instruction; no orphan images; video embedded at top) before reporting to the user.
-- **Prefer Path A (the `mothy` connector) so no agent ever handles a Zoho credential at all.** On Path B only: **secrets stay env-var-first and are never printed by agents.** Resolve Zoho creds env-var-first: `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` (resolution order: env var → `$MOTHY_STATE_DIR` → `~/.mothy/.state/zoho-creds.json`; minted tokens cache at `~/.mothy/.state/zoho-tokens.json`). Brief every agent to read them from there and never echo a secret or token into a report, log, or committed file, and never commit `.state/` creds or the article images.
+**Prefer Path A so no agent ever handles a Zoho credential at all.** Path B also uses server-side Zoho via MCP — still no local `ZOHO_*`.
 
 ## 0. Plan + confirm scope first
 
-- Identify the source flow + load its config; read the `article.*` subtree. **Preferred raw material:** a completed `/video` run for that `flowId` — its per-step screenshots + the step instructions are the article's material (the `/video` skill exports one PNG per click/type action; see "Sourcing screenshots" below). If no `/video` artifacts exist, gather the steps fresh (drive the app or have the user supply screenshots).
-- Confirm with the user, before building: (a) the **Vimeo link** for the embed, (b) the **flow/title** and audience, (c) the **target section** under the configured root category (recommend one; create it if it doesn't exist), (d) the ordered step list (one block per click/type).
-- Cheap to confirm, expensive to rebuild — lock the step list + Vimeo link + section BEFORE you start assembling images and creating the article.
+- Identify the source flow. **Preferred:** a completed `/video` Path A `job_id` → pass as `from_video_job` to `article_make`.
+- Confirm with the user: (a) flow id, (b) reuse of video job / Vimeo link, (c) audience / section if Path B.
+- Cheap to confirm, expensive to rebuild.
 
 ## 1. The pipeline (stages)
 
+**Path A (default):**
 ```
-plan/confirm → run PUBLISH GATE → gather per-step screenshots + instructions → confirm Vimeo embed link
-            → read KB categories → choose configured root category → create/choose section under it
-            → build HTML (video embed at top, then one block per step: screenshot + instruction)
-            → embed each screenshot as a base64 data: URI → SANITIZE the HTML → create DRAFT article (permission=ALL)
-            → MANDATORY: re-fetch the article and verify every <img> src is a data:image/ URI + the video iframe src carries ?h= — retry/fix before reporting done
-            → return the Draft article URL for review
+confirm flow (+ from_video_job / vimeo_id) → article_make → poll render_status → return Draft URL
+```
+
+**Path B (hand-authored):**
+```
+plan/confirm → PUBLISH GATE → gather screenshots + instructions → confirm Vimeo embed
+            → zoho_kb_categories → build HTML → zoho_kb_article_create (Draft) → return editor URL
 ```
 
 ## 2. Sourcing the per-step screenshots + instructions
 
-**Per-step parity is the whole point — every click/type step gets its own screenshot.** Two paths:
+On **Path A**, Agent37 owns sourcing. On **Path B**:
 
-- **From a `/video` run (preferred).** The `/video` skill exports a per-step screenshot for each click/type action (the same synthetic-cursor frame just before/at the click), plus the matching written instruction (derived from the VO line or the beat's intent). Reuse those PNGs and instructions directly — same ordering, same flow. If the `/video` artifacts give you a continuous beat but not discrete per-step frames, slice per-step frames from the captured webm at each click timestamp, or re-run the beat capturing a screenshot at every interaction.
-- **Fresh capture.** If there's no `/video` run, drive the real app (Playwright, headed or headless) and screenshot at EVERY click/type: name each shot `step-NN-<slug>.png` and write its one-line instruction ("Click **Course Builder** in the left nav.", "Type the learner's name into the **Search** box."). Imperative voice, bold the UI target, one action per step.
+- **From a `/video` run (preferred).** Reuse per-step PNGs + instructions when present.
+- **Fresh capture.** Only if needed and Path A is unavailable — drive the app and screenshot every click/type.
 
-Discipline: instruction text must match the rendered screen (real data often differs from the brief). Spell out full feature/dimension names, not acronyms. Scrub PII from any screenshot before embedding (real rosters = real names — crop/blur or re-shoot against demo data). The publish gate (below) re-scans for PII as a hard checkpoint.
+Discipline: instruction text must match the rendered screen; scrub PII; publish gate re-scans.
 
-## 3. Zoho Desk KB API (verified this session)
+## 3. Zoho Desk KB API notes (Path B / specialist reference)
 
-**Data center / base URL.** Built from `config.article.zoho.dc`: base = `https://desk.zoho.<dc>`. CommandIQ is the US DC (`dc: "com"` → `https://desk.zoho.com`). EU/IN/AU/CN differ — read it from config, never assume.
+Path B goes through MCP (`zoho_kb_*`) — you do not mint tokens locally. The REST shapes below are reference for HTML assembly and for understanding server behavior; **do not** tell end users to set `ZOHO_*` for Path A or Path B.
 
-**Org.** `config.article.zoho.orgId` (CommandIQ: `830065756`) — sent as the **`orgId`** request header on every Desk API call.
+**Data center / base URL.** `https://desk.zoho.<dc>` from config (`com` → `https://desk.zoho.com`).
 
-**OAuth.** A refresh token (long-lived) with scopes:
-```
-Desk.articles.ALL,Desk.settings.ALL,Desk.basic.READ,Desk.search.READ
-```
-- Creds resolve **env-var-first**: `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` (order: env var → `$MOTHY_STATE_DIR` → `~/.mothy/.state/zoho-creds.json`); minted access tokens cache at `~/.mothy/.state/zoho-tokens.json`.
-- **Mint an access token from the refresh token** before each session (access tokens expire ~1h):
-  `POST https://accounts.zoho.com/oauth/v2/token` with `grant_type=refresh_token&client_id=…&client_secret=…&refresh_token=…` → `{ access_token }`.
-- Send `Authorization: Zoho-oauthtoken <access_token>` + `orgId: <config orgId>` on every Desk call.
-- **Security:** never echo the client secret / refresh token / access token into transcript, logs, or a committed file. The `.state/` dir is gitignored — keep it that way; do not commit creds, tokens, or downloaded article images.
+**Org.** `config.article.zoho.orgId` as `orgId` header on direct REST only.
 
-**Endpoints.**
-- **List categories** — `GET /api/v1/kbRootCategories` (root categories; drill into a category for its sections/child categories). Use this to find the configured **root category** and its sections.
-- **Create a section (child category) ONLY** — `POST` to the categories endpoint with `name` + a `parentCategoryId` (a "section" is a child category under a root category). **You CANNOT create a root category — the token 403s on root-category create.** Reuse the configured root category (`config.article.zoho.rootCategory`, e.g. "Using CommandIQ") and create only the **section** under it.
-- **Create an article** — `POST /api/v1/articles` with header `orgId` and JSON body:
-  ```json
-  {
-    "categoryId": "<the SECTION id>",
-    "title": "<article title>",
-    "answer": "<HTML body with inline base64 data: image URIs>",
-    "permission": "ALL",
-    "status": "Draft"
-  }
-  ```
-  - `categoryId` is the **section id** (the child category), not the root.
-  - `permission` = `config.article.zoho.permission` — the **all/everyone** value so the article is available to ALL users (not just signed-in users or agents). Confirm the exact enum string against the live API response.
-  - `status` = `"Draft"` (`config.article.zoho.status`) — never auto-publish.
+**Image handling — embed base64 `data:` URIs inline** when assembling Path B HTML (Zoho image upload 404s with the Self-Client token). Review the rendered Draft; theme may strip `data:` URIs.
 
-  **Zoho article permission enum (2026-07-08 — verified LIVE).** The article `permission` field controls WHO may view the article:
-  - `ALL` = public / anyone (anonymous visitors can view). This is the **default** for normal help articles and the usual value of `config.article.zoho.permission`.
-  - **logged-in / registered-users-only** — the Desk API **accepts `REGISTERED_USERS` (WITH underscore) on input**, but **stores and returns it as `REGISTEREDUSERS` (NO underscore).** So PATCH/POST with `"permission":"REGISTERED_USERS"`, but when you re-GET to VERIFY, assert the STORED value is `"REGISTEREDUSERS"` — **verify by the STORED form, not the input form, or the check falsely fails.** Plain `"REGISTERED"` is **REJECTED**.
-  - `AGENTS` = Zoho Desk agents only. `SPECIFIED`/`DEPARTMENT` = specific users/departments.
-  - **When to restrict:** default public help/marketing articles stay `ALL` (`config.article.zoho.permission`). Set `REGISTERED_USERS` only for articles that should be gated behind portal login — admin/settings/internal-facing content, or any article Rich flags as logged-in-only. Changing permission does **NOT** change `status` (stays Published/Draft) or the permalink — it only changes WHO can view. (The mothy pipeline's `normalizeZohoPermission` / `zohoPermissionMatches` helpers in `lib/zoho-desk-kb.mjs` encode this input↔stored asymmetry so a restricted-visibility path round-trips + verifies correctly.)
+**Permission enum (2026-07-08):** `ALL` = public; registered-only input `REGISTERED_USERS` stores as `REGISTEREDUSERS`; verify the STORED form.
 
-**Image handling — embed base64 `data:` URIs inline (do NOT upload to Zoho).** The Zoho article image/attachment upload API **404s with this token** — do not call it. Instead, base64-encode each per-step PNG and embed it directly in the HTML answer:
-```html
-<img src="data:image/png;base64,iVBORw0KGgo…" alt="Step N — <description>"/>
-```
-Caveat: **some helpcenter themes strip `data:` URIs** when rendering. So **review the rendered Draft before publishing** to confirm the screenshots actually display; **fallback** if a theme strips them = paste the images via the Zoho web editor on the Draft. Never hot-link the scratchpad path — the article must render standalone from its own answer body.
+## 4. Build the HTML body (Path B — Zoho-editor-compatible)
 
-**Always confirm the live shapes against a real response** (the `permission` enum, the exact section-create payload) — Zoho's editor + API have version quirks; read one real category list + one real article create response before hard-coding strings.
-
-## 4. Build the HTML body (Zoho-editor-compatible)
-
-Clean, semantic markup compatible with Zoho's KB editor:
+Clean, semantic markup:
 
 - **Video embed FIRST**, at the very top of the body — an INLINE Vimeo player that plays IN the article (not a click-to-open-new-tab thumbnail). Use the Vimeo `<iframe>` player embed:
   ```html
@@ -238,75 +200,52 @@ Clean, semantic markup compatible with Zoho's KB editor:
 3. [ ] HTML sanitize: data: URIs image/* only; no `<script>`; no `on*`; no `javascript:`; semantic HTML only.
 → only if all three pass: create the Draft.
 
-## 5. Create the Draft + return the URL (PATH B — direct REST)
+## 5. Create the Draft + return the URL
 
-> On **Path A** this whole section collapses to two `mothy` calls (`zoho_kb_categories`, then
-> `zoho_kb_article_create`), which do the token mint, the POST and the Draft pin server-side.
-> Read this section only when the machine genuinely carries the `ZOHO_*` creds.
+**Path A:** `article_make` + `render_status` — Agent37 creates the Draft. Main thread only confirms scope, starts the job, polls, and returns the editor URL.
 
-Dispatch this whole sequence to ONE sub-agent (per the Orchestration section) — the main thread does not run these steps itself; it runs the publish gate and reviews the agent's returned Draft. The agent's brief covers, in order:
+**Path B:** collapses to `zoho_kb_categories` then `zoho_kb_article_create` (server-side Draft pin). Dispatch HTML assembly to a sub-agent when the body is large; main thread runs the publish gate and reviews the Draft.
+
+**Specialist direct REST** (only when a machine already has `ZOHO_*` and MCP Path A/B are unavailable — not the teammate default):
 
 1. Mint the access token from the refresh token (env-var-first creds).
-2. `GET /api/v1/kbRootCategories` → find the configured **root category** (`config.article.zoho.rootCategory`; it MUST already exist — do not attempt to create a root category), then find/create the target **section** under it.
-3. Assemble the HTML: video embed at top, then per-step blocks, each screenshot embedded as an inline base64 `data:image/...` URI (do NOT call the Zoho image-upload API — it 404s).
-4. Confirm the publish gate passed (the orchestrator gates before dispatch; the agent re-asserts the HTML-sanitize check on its own assembled body as a last line of defense).
-5. `POST /api/v1/articles` with `categoryId`=section id, `title`, `answer`=HTML, `permission`=`config.article.zoho.permission`, `status`=`"Draft"`, `orgId` header.
-6. From the create response, build the **Draft article URL** (the agent/admin edit URL for the new article id).
-7. **MANDATORY VERIFICATION — the article is not "done" until this passes.** `GET /api/v1/articles/{id}` (re-fetch, don't trust the create response's echoed body) and assert, programmatically:
-   - Every `<img>` tag's `src` starts with `data:image/` (or, if a future method other than data-URI is ever used, that it is a confirmed Zoho-hosted URL verified by a HEAD/GET request that returns `200` **without** an `Authorization` header — i.e. actually publicly renderable, not just present).
-   - The video iframe `src` starts with `https://player.vimeo.com/` and contains `?h=` (unlisted videos render blank without the hash — §4).
-   - Zero `[Screenshot: ...]` or `[Video: ...]` placeholder text left un-replaced in the `answer` HTML.
-   - The count of images in the final HTML matches the count of steps planned.
-   If any assertion fails: fix it (re-encode/re-embed) and re-PATCH, then re-verify. Do not report the article as complete on a failed or skipped verification.
-8. Report back: the Draft article id + URL, the section it landed under, the embedded-image count, confirmation `status=Draft`, and the verification result from step 7 (pass, with the assertions checked). **Do not publish** — the human reviews + publishes from Zoho.
-
-The main thread then reads the agent's report + Draft preview, judges reader parity, spot-checks that the verification in step 7 was actually run (not just claimed), AND confirms the embedded screenshots actually render (theme may strip `data:` URIs — fallback is pasting via the Zoho web editor), and returns the Draft URL to the user.
+2. `GET /api/v1/kbRootCategories` → find the configured **root category**, then find/create the target **section**.
+3. Assemble the HTML: video embed at top, then per-step blocks with inline base64 `data:image/...` URIs.
+4. Re-assert the HTML-sanitize check.
+5. `POST /api/v1/articles` with `categoryId`, `title`, `answer`, `permission`, `status:"Draft"`.
+6. Build the Draft editor URL from the create response.
+7. **MANDATORY VERIFICATION** — `GET /api/v1/articles/{id}` and assert every `<img src>` starts with `data:image/`, the video iframe carries `?h=`, zero `[Screenshot:` / `[Video:` placeholders, image count matches steps. Fix and re-PATCH until clean.
+8. Report Draft id + URL + section + `status=Draft`. **Do not publish.**
 
 ## Dos and Don'ts
 
 DO:
-- Run orchestrator-only: the main thread plans, reads config, runs the publish gate, briefs, reviews the returned Draft, and decides — every Zoho/OAuth/HTML-assembly/draft-create step is a dispatched sub-agent.
-- Read the Zoho destination from `config.article.zoho.*`; resolve creds env-var-first.
-- Run the **publish gate** (demo-org binding, PII/secret scan, HTML sanitize) BEFORE creating the Draft — every time.
-- Reuse the `/video` run's per-step screenshots + instructions when they exist — same flow, same order.
-- Put the **video embed at the top**, then one screenshot + one instruction per click/type step. Reader parity is the bar.
-- Read the live KB category list FIRST; place under the configured **root category**; create only a **section** under it (cannot create a root category — 403).
-- Create the article as **Draft** with **all-users** permission. Embed every screenshot as an inline base64 `data:` URI; review the rendered Draft to confirm they display (theme may strip them → paste via the Zoho web editor).
-- Scrub PII from screenshots before embedding. Spell out full feature names, not acronyms.
-- **Re-fetch the article after create/update and programmatically verify every `<img>` src is a `data:image/` URI (or a confirmed-public URL) and the video iframe carries `?h=` before reporting done** (§5 step 7). This is mandatory, not optional — it is the check that would have caught the 2026-07-02 broken-embeds incident before the user did.
-- Return the Draft article URL for human review.
+- Prefer Path A (`article_make`) for demo-flow articles; pass `from_video_job` / `vimeo_id` when available.
+- Prefer Path B (`zoho_kb_*`) for hand-authored HTML — still no local Zoho keys.
+- Run the **publish gate** before Path B create.
+- Put the **video embed at the top**, then one screenshot + instruction per click/type step.
+- Always leave the article as **Draft**. Return the editor URL.
+- Name the real blocker when publish fails — never "no tool exists."
 
 DON'T:
-- Don't run the Zoho pipeline (token mint / category reads / HTML assembly / draft create) from the main thread — dispatch it to a sub-agent and review the returned Draft.
-- Don't auto-publish — always leave it as Draft.
-- Don't build an article from an org NOT in `config.seed.demoOrgAllowlist` — HARD STOP.
-- Don't call the Zoho image-upload API (404s with this token) — embed base64 `data:` URIs inline instead.
-- Don't try to create a root category (403) — reuse the configured one and create only a section.
-- Default permission is **`ALL`** (public) per `config.article.zoho.permission` — don't gate a public help article behind login without reason. Admin/settings/internal-facing articles, or any article Rich flags, get **`REGISTERED_USERS`** (logged-in only); input `REGISTERED_USERS`, verify stored value `REGISTEREDUSERS` (see §3 permission-enum quirk). Don't use `AGENTS`/`SPECIFIED` unless explicitly asked.
-- Don't skip a step's screenshot — every click/type step gets its own image + instruction (no orphan images, no instruction-only steps, no `[Screenshot: ...]` placeholder text left in the shipped HTML).
-- Don't hot-link the scratchpad path in the HTML — the answer must render standalone from its own inline images.
-- Don't embed an unlisted Vimeo video without its `?h=<HASH>` in the player src — it renders BLANK (§4; 2026-07-02 incident).
-- Don't skip the post-create/update verification step (§5 step 7) or accept an agent's unverified claim that images are "embedded" — re-fetch and check the actual `src` values.
-- Don't echo or commit the client secret / refresh token / access token, and don't commit the article images or `.state/` creds (gitignored — keep it that way).
-- Don't put raw UUIDs / debug / "preview/dummy/showcase" copy, PII, `<script>`, `on*` handlers, `javascript:` URIs, or non-image `data:` URIs into the article.
-- Don't assume a data center — read `config.article.zoho.dc` (CommandIQ is US `com`).
+- Don't require local `ZOHO_*` / ElevenLabs / Vimeo for Path A or Path B.
+- Don't use `agent37_exec` as the default article path.
+- Don't auto-publish.
+- Don't build an article from an org NOT in `config.seed.demoOrgAllowlist` when sourcing from capture.
+- Don't publish through `zoho_kb_search` / `zoho_kb_article` (read-only).
+- Don't embed an unlisted Vimeo video without `?h=<HASH>` in the player src.
+- Don't echo or commit Zoho tokens / `.state/` creds.
 
 ## Quick reference
 
 | Thing | Value |
 |---|---|
-| Base URL | `https://desk.zoho.<config dc>` (CommandIQ: US DC `https://desk.zoho.com`) |
-| Org | `config.article.zoho.orgId` (CommandIQ: `830065756`) — `orgId` header |
-| Root category | `config.article.zoho.rootCategory` (CommandIQ: `Using CommandIQ`) — reuse, never create (403) |
-| OAuth scopes | `Desk.articles.ALL,Desk.settings.ALL,Desk.basic.READ,Desk.search.READ` |
-| Token mint | `POST https://accounts.zoho.com/oauth/v2/token` (refresh_token grant) |
-| Auth header | `Authorization: Zoho-oauthtoken <access_token>` |
-| List categories | `GET /api/v1/kbRootCategories` |
-| Create SECTION only | `POST` categories endpoint, `name` + `parentCategoryId` (root-category create 403s) |
-| Create article | `POST /api/v1/articles` → `{categoryId(section), title, answer(HTML), permission(config), status:"Draft"}` |
-| Permission enum | `ALL`=public (default). Registered-only: input **`REGISTERED_USERS`** (underscore), stored/returned as **`REGISTEREDUSERS`** (no underscore) — verify by the STORED form. `REGISTERED` rejected. `AGENTS`/`SPECIFIED`/`DEPARTMENT` = agents/specific. Restricting doesn't change status/permalink. |
-| Images | Embed inline base64 `data:image/...` URIs (Zoho upload API 404s); review rendered Draft, fallback = paste via web editor |
-| Video embed | INLINE Vimeo `<iframe>` player at top, src `player.vimeo.com/video/<id>?h=<HASH>` — the `?h=<HASH>` is MANDATORY for unlisted videos or it renders blank (2026-07-02 incident). Verify `privacy.embed=public`. oEmbed `https://vimeo.com/api/oembed.json` to resolve; click-to-open poster is a LAST-resort fallback only |
-| Post-write verification | **Mandatory** — re-`GET` the article, assert every `<img src>` starts with `data:image/`, iframe src carries `?h=`, zero `[Screenshot:`/`[Video:` placeholders left (§5 step 7) |
-| Publish gate | demo-org binding (allowlist) + PII/secret scan + HTML sanitize — MANDATORY before POST |
-| Creds (env-var-first) | `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` / `ZOHO_REFRESH_TOKEN` → `$MOTHY_STATE_DIR` → `~/.mothy/.state/zoho-creds.json` (tokens cache `~/.mothy/.state/zoho-tokens.json`) |
+| Path A (default demo-flow) | `article_make` → poll `render_status` (optional `from_video_job` / `vimeo_id`) |
+| Path B (hand-authored) | `zoho_kb_categories` → `zoho_kb_article_create` (Draft-only) |
+| Local ZOHO_* | Not required for Path A or Path B |
+| Root category (CommandIQ) | `Using CommandIQ` — reuse, never create (403) |
+| Permission | `ALL` public default; registered-only input `REGISTERED_USERS` / stored `REGISTEREDUSERS` |
+| Images (Path B HTML) | Inline base64 `data:image/...` URIs |
+| Video embed | `player.vimeo.com/video/<id>?h=<HASH>` — `?h=` mandatory for unlisted |
+| Publish gate | demo-org binding + PII scan + HTML sanitize — before Path B create |
+

@@ -62,7 +62,18 @@ test('policy block names the widget, the two-way-door rule, and (Recommended)', 
   assert.match(MC_POLICY_BLOCK, /AskUserQuestion/);
   assert.match(MC_POLICY_BLOCK, /\(Recommended\)/);
   assert.match(MC_POLICY_BLOCK, /two-way doors/);
+  assert.match(MC_POLICY_BLOCK, /Plain language/);
+  assert.match(MC_POLICY_BLOCK, /Hard safety checks/);
+  assert.doesNotMatch(MC_POLICY_BLOCK, /Hard gates \(red-green TDD/);
   assert.doesNotMatch(MC_POLICY_BLOCK, /\b\/mc\b.*opt-in/i);
+});
+
+test('mc skill requires plain-language widget text', () => {
+  const md = readFileSync(join(ROOT, 'plugins', 'mothy', 'skills', 'mc', 'SKILL.md'), 'utf8');
+  assert.match(md, /## Plain language \(mandatory\)/);
+  assert.match(md, /no jargon/);
+  assert.match(md, /private preview/);
+  assert.doesNotMatch(md, /"Hold at dev"/);
 });
 
 test('WIRING: inject-mc-policy.mjs is on SessionStart in BOTH hook files', () => {

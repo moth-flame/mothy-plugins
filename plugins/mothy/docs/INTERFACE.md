@@ -6,10 +6,12 @@ the *shape* of the artifacts and the *auth surface*, not the specifics of any on
 flow, org, or demo script. A different product, a different flow, or a different
 narrator can be dropped in without changing a word here.
 
-The two skills communicate **only** through files on disk under a per-video scratchpad
-directory. `/article` never re-drives the browser, never re-renders, and never re-calls
-ElevenLabs or Vimeo — it reads what `/video` already wrote. If the artifacts below are
-present and well-formed, `/article` can run with zero access to the running app.
+The two skills communicate through artifacts. **Path A (DEFAULT):** a remote
+Agent37 job (`video_make` / `article_make`) hands off via `job_id` / `vimeo_id`
+and `render_status` — no local scratchpad required. **Path B (specialist /
+offline):** files on disk under a per-video scratchpad directory; `/article`
+reads what a local `/video` already wrote. If Path B artifacts below are present
+and well-formed, a Path B `/article` can run with zero access to the running app.
 
 ---
 
@@ -190,16 +192,25 @@ Demo-capture login (for Playwright) uses a runtime password from
 
 ---
 
-## NOT IMPLEMENTED — discovery-only MCP
+## Path A — remote Agent37 via mothy MCP (DEFAULT)
 
-An earlier draft of this design proposed **executable** `make_demo_video` MCP actions —
-i.e. having the Mothy MCP itself drive the browser, render the video, and upload it.
+Production `/video` and demo-flow `/article` do **not** need local ElevenLabs,
+Vimeo, Zoho, ffmpeg, or Playwright. The Vercel MCP function still has no browser;
+it **queues** work onto **Agent37**, which does:
 
-**This was rejected.** A Vercel function (where the Mothy MCP runs) has no browser and
-no ffmpeg: it cannot run Playwright, cannot invoke ffmpeg, and cannot do a resumable
-Vimeo `tus` upload of a large local file. Video production therefore lives entirely in
-the **local** `/video` skill (Playwright + ElevenLabs + ffmpeg + Vimeo on the user's
-machine).
+| Action | Role |
+| --- | --- |
+| `video_flows` / `video_flow_kb` / `video_flow_request` / `commandiq_repo_intel` | Discover or request a flow |
+| `video_make` | Start remote render → `job_id` |
+| `article_make` | Start remote KB draft (optional `from_video_job` / `vimeo_id`) → `job_id` |
+| `render_status` | Poll until `done` / `failed` / `awaiting_qa` |
+| `render_approve` / `render_revise` | QA when `awaiting_qa` |
+| `zoho_kb_categories` / `zoho_kb_article_create` | Hand-authored Path B KB Draft (server-side Zoho) |
 
-The MCP's role is **discovery-only** — surfacing config, brokering Slack/Sheets, and
-returning playbook/account data — never executing the capture/render/upload pipeline.
+`agent37_exec` remains **admin-only** allowlisted diagnostics (render-iterate,
+creds-check, Vimeo probes) — not the default user path.
+
+Local Path B (Playwright + ElevenLabs + ffmpeg + Vimeo on the caller's machine,
+plus the scratchpad contract in §1) is specialist/offline only. `/video-setup`
+applies to Path B, not Path A.
+

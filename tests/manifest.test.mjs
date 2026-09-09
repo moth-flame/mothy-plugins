@@ -184,10 +184,16 @@ const EXPECTED_COMMANDS = [
   'deck',
   'dev-setup',
   'edit-in-place',
+  'evals',
   'fix',
+  'idea-intake',
   'mc',
   'onboard',
   'plan',
+  'pr-faq',
+  'prd',
+  'proceed',
+  'process-navigator',
   'test',
   'update-skills',
   'video',
@@ -359,12 +365,12 @@ test('video tooling paths are channel-agnostic (CLAUDE_PLUGIN_ROOT is plugin-onl
 });
 
 test('video gates on prerequisites before spending its ~20.7k on-invoke budget', () => {
-  // video ships in the plugin, which is "Installed by default" org-wide — so every
-  // teammate has it, while it actually needs the app repo checked out and runnable,
-  // demo seed data, ffmpeg + Playwright, and ElevenLabs/Vimeo creds. It is the single
-  // most expensive skill here to invoke (~20.7k tokens), so an unrunnable invoke must
-  // bail in the first exchange, not 20k deep. It stays in the plugin deliberately:
-  // ${CLAUDE_PLUGIN_ROOT} resolves there, so it genuinely works for whoever does capture.
+  // video ships org-wide. Path A (DEFAULT) is remote Agent37 via mothy MCP
+  // (video_make) — no local ElevenLabs/Vimeo/ffmpeg. Path B is the local
+  // capture rig (~20.7k tokens) and still needs those tools. The gate must
+  // run first, accept Path A when MCP is connected, and only demand local
+  // tooling for Path B — never bail the whole skill on missing local creds
+  // when Path A is available.
   const md = readFileSync(join(pluginRoot, 'skills', 'video', 'SKILL.md'), 'utf8');
   assert.ok(md.includes('<!-- BEGIN prereq-gate'), 'video/SKILL.md lost its prerequisites gate');
   assert.ok(md.includes('<!-- END prereq-gate -->'), 'video prereq-gate is unterminated');
@@ -372,10 +378,12 @@ test('video gates on prerequisites before spending its ~20.7k on-invoke budget',
   // Must precede the flow-config machinery, or the skill has already started working.
   const configAt = md.indexOf('flow config');
   assert.ok(gateAt > 0 && configAt > 0 && gateAt < configAt, 'gate must precede the flow-config section');
+  assert.match(md, /video_make/, 'Path A must call video_make');
+  assert.match(md, /render_status/, 'Path A must poll render_status');
   // Must offer a real alternative rather than dead-ending a teammate who cannot run it.
   assert.match(md, /\/deck/, 'gate should redirect to /deck');
   assert.match(md, /\/customer-brief/, 'gate should redirect to /customer-brief');
-  // Installing tooling is fine; a missing app checkout is the hard stop. Both must appear.
+  // Path B local tooling install hints stay for the specialist track.
   assert.match(md, /winget install Gyan\.FFmpeg/, 'must give a Windows ffmpeg install');
   assert.match(md, /brew install ffmpeg/, 'must give a macOS ffmpeg install');
 });

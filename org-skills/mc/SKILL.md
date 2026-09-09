@@ -1,6 +1,6 @@
 ---
 name: mc
-description: Surface every open decision that is the user's to make as clickable multiple-choice questions, recommendation first, one decision per question. Always-on for blocking decisions — nobody has to type /mc. Also use when the user says "/mc", "ask me multiple choice", "give me options", "what do you need from me", "what's blocking you", or "ask me the questions". Never bury a question in prose.
+description: Surface every open decision that is the user's to make as clickable multiple-choice questions in plain language (no jargon), recommendation first, one decision per question. Always-on for blocking decisions — nobody has to type /mc. Also use when the user says "/mc", "ask me multiple choice", "give me options", "what do you need from me", "what's blocking you", or "ask me the questions". Never bury a question in prose.
 ---
 
 # mc — ask for a decision the way it can actually be answered
@@ -33,10 +33,21 @@ If the sweep turns up nothing, say so in one line — *"nothing blocking; here's
 
 - **Recommendation FIRST, marked `(Recommended)`.** Having an opinion is the job. An unranked menu pushes the analysis back onto them.
 - **Carry the context INTO the question.** One sentence of what happened and why the choice exists, restated inside the question text — never "as noted" / "given the above". Assume they have NOT read the paragraph above. If the question is unreadable on its own, it is unreadable.
-- **Each option states its CONSEQUENCE, not its name.** "Hold at dev" means nothing. "I push to dev, you click through it, then I ship to prod on your word — costs you ~2 minutes" is a decision they can make in one read.
+- **Each option states its CONSEQUENCE, not its name.** "Keep it in the preview" means little on its own. "I leave it on a private preview link you can click through; nothing goes live until you say so — costs you ~2 minutes" is a decision they can make in one read.
 - **Name the real trade honestly, including against your own recommendation.**
 - **Numbers, not adjectives.** If a consequence has a measured size, it goes in the option.
 - **Say what is reversible.** "Clears on the next run" and "no rollback" are the two facts that most change an answer.
+
+## Plain language (mandatory)
+
+Most people answering these questions are **not** engineers or product specialists. They cannot make a good call if the question or options use shop jargon.
+
+**Write every question and every option the way you'd explain it to a smart coworker outside your specialty.** Everyday words. What happens next. What it costs them. What they can undo.
+
+- **Ban unexplained jargon in the widget text.** No bare "PR", "API", "SHA", "TDD", "CI", "merge conflict", "rollback", "two-way door", "confirmation_code", "prod/staging", "flag flip", "pre-push", or similar — unless you immediately translate it into what the person will see or do ("the live customer site", "a change we can undo in one click", "a safety check I can't skip").
+- **Consequence in plain English, not system names.** Prefer "I send the update to the whole team in Slack" over "fan-out via Slack API"; "I put it on the live site" over "deploy to prod"; "I open a review for someone to approve" over "open a PR".
+- **One-line sanity check before you ask:** would someone who doesn't know our tools still know which option matches what they want? If not, rewrite.
+- **Internal terms stay in your head.** You may still think "1-way door" / "AskUserQuestion" / gates — those are for you. The human-facing prompt and options must not require that vocabulary.
 
 ## What does NOT belong in a widget
 

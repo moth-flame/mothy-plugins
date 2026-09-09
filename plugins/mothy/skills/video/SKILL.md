@@ -1,56 +1,124 @@
 ---
 name: video
-description: Produce a narrated product-demo VIDEO by driving the real running app with Playwright, generating voiceover with ElevenLabs, and assembling with ffmpeg. Use when the user says "/video", "make a demo video", "record a product demo", "capture a walkthrough video", "make a sales/capability video of [flow]", or asks to reproduce a live demo as a recorded asset. Orchestrates parallel capture agents per beat, a synthetic cursor/finger-dot overlay, value-first VO, and a final live-render review. NOT for screenshots-only, GIFs, or editing an existing video file.
+description: >-
+  Produce a narrated product-demo VIDEO. DEFAULT Path A runs remotely on Agent37 via
+  mothy MCP (video_flows → video_make → render_status; QA via render_approve /
+  render_revise) — no local ELEVENLABS_API_KEY, VIMEO_ACCESS_TOKEN, ffmpeg, or
+  Playwright required. Path B is the specialist/offline local capture rig
+  (Playwright + ElevenLabs + ffmpeg + Vimeo) plus /video-setup. Use when the user
+  says "/video", "make a demo video", "record a product demo", "capture a
+  walkthrough video", "make a sales/capability video of [flow]", or asks to
+  reproduce a live demo as a recorded asset. NOT for screenshots-only, GIFs, or
+  editing an existing video file.
 ---
 
 # video — narrated product-demo video producer
 
-<!-- BEGIN prereq-gate — this skill is org-distributed ("Installed by default") but is a
-     SPECIALIST capture rig, not a general team capability. Costs ~20.7k tokens on invoke.
-     Bail in the first exchange rather than 20k deep. PRESERVE this block. -->
+<!-- BEGIN prereq-gate — this skill is org-distributed ("Installed by default").
+     Path A (DEFAULT) is remote Agent37 via mothy MCP — cheap, no local secrets.
+     Path B is the specialist local capture rig (~20.7k tokens). Bail only when
+     NEITHER path can run. PRESERVE this block. -->
 
 ## §0 — Prerequisites gate (MANDATORY — before anything else)
 
-**This skill is far more demanding than the rest of the Mothy set, and it is installed
-for everyone in the org.** Most people who reach it cannot run it. Check first, and if
-the prerequisites aren't there, say so immediately — do not start planning beats, do not
-spawn capture agents, do not read the flow config. A wasted invoke costs ~20k tokens and
-produces no video.
+**Prefer Path A. Do not demand local ElevenLabs / Vimeo / ffmpeg / Playwright when the
+mothy MCP connector is available.** Check which path can run in the first exchange —
+do not start planning beats, spawn capture agents, or read a local Path B flow-config until
+you know.
 
-You need **all** of the following:
+### Path A — remote Agent37 via mothy MCP (DEFAULT)
 
-1. **A capturable target.** Most flows need NO repo checkout — they drive the **live dev
-   app** as the demo-capture user against allowlisted, anonymized demo orgs (see the
-   reference appendix). Only flows explicitly marked local-dev need the app's repo,
-   `.env.local` and a reachable Supabase. Check which kind the requested flow is before
-   telling anyone they need a developer setup.
-2. **Capture credentials for that target**, resolved from env at runtime — never a literal
-   in any file, brief, log or artifact. Filming an app you can't log into, or an org with
-   no demo data, produces an empty video.
-3. **`ffmpeg` and Playwright available.** Check `ffmpeg -version` and whether Playwright's
-   browsers are installed. If either is missing and everything else above is satisfied,
-   install them — `winget install Gyan.FFmpeg` on Windows, `brew install ffmpeg` on macOS,
-   plus `npx playwright install chromium` — rather than sending the user away.
-4. **ElevenLabs (voiceover) and, for delivery, Vimeo credentials.** `/video-setup` reports
-   exactly which are missing without ever printing a value — point there, don't guess.
+**Gate satisfied when the `mothy` MCP connector is connected in this session.** Secrets
+(ElevenLabs, Vimeo, demo-capture login, ffmpeg, Playwright) live on Agent37 — the caller
+needs **none** of them locally. `agent37_exec` is admin diagnostics only; it is **not**
+the default user path.
 
-**If you cannot reach a capturable target, STOP and say so plainly:**
+Path A steps (after the gate):
+1. Confirm the flow — `mothy({action:"video_flows"})` lists ready flows with plain-language
+   summaries. Suggest the matching id (e.g. `commandiq`); never invent a flow name.
+2. If no ready flow matches: `video_flow_kb` → (gap only) `commandiq_repo_intel` →
+   `video_flow_request` — see CONFIG below. Do not author local flow-config files in chat.
+3. Start the render — `mothy({action:"video_make", params:{flow}})` → `job_id`.
+4. Wait — poll `mothy({action:"render_status", params:{job_id}})` until `done` /
+   `failed` / `awaiting_qa`, **or** tell the user a Slack DM will arrive from Agent37.
+5. When status is `awaiting_qa` — show the preview; on approval call
+   `render_approve`, on changes call `render_revise` with the feedback. Never invent
+   other QA action names.
 
-> Producing a demo video means driving the real app with a browser and filming it, so I
-> need to be able to log into it plus ffmpeg and an ElevenLabs key for the voiceover. I
-> can't get in from here. If you want a demo video made, ask Rich. If you were after
-> something else, `/deck` builds a customer capability deck and `/customer-brief` builds
-> an account one-pager — neither needs any of this.
+**Path A does NOT require** `ELEVENLABS_API_KEY`, `VIMEO_ACCESS_TOKEN`, local `ffmpeg`,
+Playwright browsers, or `/video-setup`. Missing those must **not** abort Path A.
+
+### Path B — local specialist capture (only when Path A is unavailable)
+
+Use Path B only when the mothy connector is missing / cannot reach Agent37, or the user
+explicitly asks for offline/local capture. Then you need **all** of:
+
+1. **A capturable target.** Most flows drive the **live dev app** as the demo-capture
+   user against allowlisted demo orgs (see the reference appendix). Only flows marked
+   local-dev need the app repo + `.env.local` + Supabase.
+2. **Capture credentials** for that target, resolved from env at runtime — never a
+   literal in any file, brief, log, or artifact.
+3. **`ffmpeg` and Playwright.** Check `ffmpeg -version` and Playwright browsers. If
+   missing and everything else is satisfied, install them — `winget install Gyan.FFmpeg`
+   on Windows, `brew install ffmpeg` on macOS, plus `npx playwright install chromium` —
+   rather than sending the user away. `/video-setup` reports which API keys are present
+   without printing values.
+4. **ElevenLabs + Vimeo credentials** for local VO + upload — `/video-setup` again.
+
+### When neither path can run
+
+STOP and say so plainly:
+
+> I can make a demo video remotely via the Mothy connector (Agent37) with no local
+> keys, or locally if this machine has ffmpeg / Playwright / ElevenLabs / Vimeo set up.
+> Neither is available here. Connect Mothy (`/connect`) for the remote path, or run
+> `/video-setup` for the local specialist path. If you need someone else to kick off a
+> remote render, ask Rich. If you were after something else, `/deck` builds a customer
+> capability deck and `/customer-brief` builds an account one-pager — neither needs
+> video tooling.
 
 Grade the failure — do not collapse these into one refusal:
-- **Missing tooling** (ffmpeg, Playwright browsers) → install it, don't send them away.
-- **Missing credentials** → point at `/video-setup`, which reports exactly which keys are
-  absent without ever printing a value. Each person sets their OWN keys locally; nothing
-  is committed and no secret travels with this skill.
-- **No reachable target app** → that is the genuine stop.
+- **No mothy connector** → Path A blocked; offer `/connect`, then Path B only if they
+  want local capture.
+- **Path B missing tooling** (ffmpeg, Playwright browsers) → install it, don't send
+  them away.
+- **Path B missing credentials** → point at `/video-setup` (presence only; never print
+  a value).
+- **No reachable target app** on Path B → that is the genuine local stop.
 
 <!-- END prereq-gate -->
-### §0.1 — Resolving `<skill>/` (read this before using any tooling path)
+
+## Path A — remote render (DEFAULT; run this unless Path B was chosen)
+
+Production `/video` for almost every teammate. Browser + ffmpeg + ElevenLabs + Vimeo
+credentials stay on Agent37; this session only calls mothy MCP actions.
+
+```
+confirm flow (video_flows) → video_make → poll render_status (or Slack DM)
+         → if awaiting_qa: render_approve | render_revise → done
+```
+
+- **Suggest**, don't browse: pick the flow whose summary matches the ask; confirm the
+  short id with the user when ambiguous.
+- **`kind`:** infer `conversations` (leadership / difficult conversations) vs
+  `technical` (hands-on maintenance/equipment) from context; ask only when unclear.
+  Never say "strategic".
+- **No local secrets.** Do not run `/video-setup`, do not check `ELEVENLABS_*` /
+  `VIMEO_*`, do not install ffmpeg for Path A.
+- **`agent37_exec` is NOT this path** — admin-only allowlisted diagnostics
+  (render-iterate, render-creds-check, Vimeo probes). Do not offer it as the default.
+- When the job completes, hand the user the Vimeo / Slack result from `render_status`
+  (or the DM). Optionally offer `/article` with `from_video_job` / `vimeo_id`.
+
+If Path A succeeds, **stop here** — do not also run the local Path B pipeline below.
+
+## Path B — local capture pipeline (specialist / offline only)
+
+> Everything from this heading through the Credentials / Dos and Don'ts sections is
+> **Path B**. Enter only when §0 chose Path B. Path A users never need these local
+> secrets or tools.
+
+### §0.1 — Resolving `<skill>/` (read this before using any Path B tooling path)
 
 Paths below are written `<skill>/tooling/...`, meaning **relative to this skill's own
 directory** — the folder containing this `SKILL.md`. The vendored tooling ships inside the
@@ -66,16 +134,22 @@ expands to nothing elsewhere, which silently turns every tooling path into an ab
 path that does not exist.
 
 
-> Born from the 2026-06 CommandMRO demo build. The *engine* (capture → VO → assemble → review → deliver) is flow-agnostic; only the beat list + seed data + delivery destinations are flow-specific, and those live in a **flow config** (see CONFIG below), never hardcoded in this prose. Reusable tooling lives in `<skill>/tooling/` (overlay lib, ffmpeg helpers, tts, assemble) — reuse it, don't rebuild it.
+> Born from the 2026-06 CommandMRO demo build. **Path A (remote)** is the default for
+> every teammate. **Path B (local)** below is the specialist/offline engine
+> (capture → VO → assemble → review → deliver) — flow-agnostic; only the beat list +
+> seed data + delivery destinations are flow-specific, and those live in a **flow
+> config** (see CONFIG below), never hardcoded in this prose. Reusable tooling lives
+> in `<skill>/tooling/` (overlay lib, ffmpeg helpers, tts, assemble) — reuse it,
+> don't rebuild it. Skip everything from here down when Path A already delivered.
 
 ## When to use / not use
 
-USE for: a multi-beat narrated screen-capture video of a real app flow, delivered as one MP4.
+USE for: a multi-beat narrated screen-capture video of a real app flow, delivered as one MP4 (remote Agent37 by default; local only when Path A is unavailable or explicitly requested).
 NOT for: a single screenshot, a silent GIF, editing/trimming an existing video the user supplies, or a slide deck (that's a different skill).
 
-If the user asks for the **CommandMRO technical demo flow** specifically → use the bundled `commandmro` reference flow (the 9-beat flow documented in the reference appendix at the end), but FIRST confirm course + module(s) with the user, leading with a recommendation (see the appendix).
+If the user asks for the **CommandMRO technical demo flow** specifically → on Path A pick the matching ready flow from `video_flows`; on Path B use the bundled `commandmro` reference flow (the 9-beat flow documented in the reference appendix at the end), but FIRST confirm course + module(s) with the user, leading with a recommendation (see the appendix).
 
-## CONFIG (per-flow)
+## CONFIG (per-flow) — Path B local configs + shared MCP corpus
 
 The engine is driven by a **flow config**: a JSON file that carries everything flow-specific so a new demo can be produced **without editing this SKILL or the tooling**. The skill reads `skills/video/tooling/flows/<flowId>.config.json` (resolved under `<skill>/` — see §0.1), validated against `skills/video/tooling/flows/flow.config.schema.json` (`schemaVersion: 1`).
 
@@ -109,7 +183,7 @@ The engine is driven by a **flow config**: a JSON file that carries everything f
 
 ## The deliverable + acceptance bar
 
-One MP4: 1920×1080, 30fps, h264/yuv420p + aac, continuous VO, all beats in order, no clipped narration, no raw IDs / debug / "preview/dummy/showcase" copy on screen. The bar is **the live-render review (§7)** — the orchestrator READS the rendered frames and judges them, not just ffprobe.
+One MP4: 1920×1080, 30fps, h264/yuv420p + aac, continuous VO, all beats in order, no clipped narration, no raw IDs / debug / "preview/dummy/showcase" copy on screen. On Path A the remote worker owns the bar; on Path B the bar is **the live-render review (§7)** — the orchestrator READS the rendered frames and judges them, not just ffprobe.
 
 **NO human-approval pause (Rich, 2026-07-02).** The live-render review (§7) is the agent's OWN confidence gate — when it passes, publish to Vimeo (per `config.deliver.vimeo.privacy`, default unlisted) and hand over the link immediately; never park a finished render waiting for a human sign-off. The unlisted link is the safety valve, not a review queue. Only stop for a human when the review still FAILS after the bounded fix loop (then report the defects + the draft path instead of publishing). The remote Agent37 worker follows the same protocol (its pause mode is env opt-in `RENDER_QA_PAUSE=1`, default OFF).
 
@@ -257,9 +331,12 @@ The "look with your own eyes" judgment stays with the orchestrator: the capture 
 - **Stay inside `config.seed.demoOrgAllowlist`** — seeding/capture may only touch the org names on the allowlist.
 - Seed via the flow's own **`config.seed.strategy`** script (e.g. direct service-role pg inserts mirroring an existing seed script) — don't stand up extra infra for data, and don't vendor a flow's seed script into the shared tooling.
 
-## Credentials (env-var-first)
+## Credentials (env-var-first) — Path B only
 
-Resolution order for every secret: **env var → `$MOTHY_STATE_DIR` → `~/.mothy/.state/<file>.json`**. Secrets stay gitignored and are NEVER echoed by sub-agents into a report, log, or committed file.
+**Path A needs none of these locally** — Agent37 holds them. Do not run `/video-setup`
+or refuse a Path A render because a local key is missing.
+
+Resolution order for every Path B secret: **env var → `$MOTHY_STATE_DIR` → `~/.mothy/.state/<file>.json`**. Secrets stay gitignored and are NEVER echoed by sub-agents into a report, log, or committed file.
 
 - **ElevenLabs:** `ELEVENLABS_API_KEY` (strip surrounding quotes — the value is sometimes wrapped in double-quotes). Fallback file: `.env.local`.
 - **Vimeo:** `VIMEO_ACCESS_TOKEN` — needs Vimeo Pro + the `upload` scope (and `edit` if you set metadata after). Fallback file: `~/.mothy/.state/vimeo-creds.json`.
