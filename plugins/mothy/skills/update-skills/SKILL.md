@@ -53,9 +53,56 @@ Then branch on what comes back. **Read the Scope column on the `mothy` line** �
 - **A list including `mothy` with Status enabled but Scope not shown / unclear** → ask them to paste the full `mothy` line (or the whole list) before Step 2. If you must guess at M+F, prefer managed.
 - **`mothy` listed as installed and enabled, but the `ls` says `No such file or directory`** → **dangling install record**: the registry entry survived but the files are gone. Go to Step 2b — `claude plugin update` cannot fix this.
 - **`failed to load` with `expected record` / `"path": ["hooks"]`** → known plugin bug through 0.24.0, not their install. Same Step 2 (pick managed vs user from Scope as above); they need **0.24.1 or later**. Do not tell them to edit JSON.
-- **`command not found: claude`** → they have Claude Desktop but not the command-line tool. Stop and say so plainly: this update cannot be done from the Desktop app's buttons today, and they need either the Claude Code CLI installed or someone with a terminal to do it for them. Do not send them into the Settings panel to hunt for an Update button — it is greyed out or lies, and that is a known bug.
+- **`command not found: claude`** (or `'claude' is not recognized…` on Windows) → they have Claude Desktop but not the Claude Code **CLI**. Do **not** hard-stop and do **not** send them into Settings → Plugins (the Update button is greyed out or lies). Go to **Step 1a** and install the CLI, then resume Step 1.
 - **A list with no `mothy` line** → they have never installed it. Go to Step 3.
 - **They say `/plugin` (or any slash command) "isn't recognized"** → they typed a slash command into the app's chat box. Nothing in this coach is a slash command. Point them at the Terminal (Applications → Utilities → Terminal on a Mac) and re-send the `claude plugin list` line to paste there.
+
+## Step 1a — Install the Claude Code CLI
+
+They need the `claude` command in a real terminal. Same one-command-at-a-time rule; assume they are not technical. Do **not** dump both OS installers — wrong OS instructions are worse than none.
+
+**If you do not already know Mac vs Windows, ask once:** *"Quick one — Mac or Windows?"* Then give only that track.
+
+### Mac / Linux
+
+Give this line alone:
+
+```
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+When it finishes, tell them to **quit Terminal completely** (close the window), reopen Terminal, and paste:
+
+```
+claude --version
+```
+
+A version number means the CLI works. Resume **Step 1** with `claude plugin list`.
+
+### Windows (PowerShell)
+
+Confirm they are in **PowerShell** (the prompt usually starts with `PS`). Git Bash is fine for later `claude plugin …` steps, but this installer is PowerShell. Give this line alone:
+
+```
+irm https://claude.ai/install.ps1 | iex
+```
+
+When it finishes, tell them to **open a new terminal** (old windows do not pick up PATH), then:
+
+```
+claude --version
+```
+
+A version number means the CLI works. Resume **Step 1** with `claude plugin list`.
+
+### Still `command not found` after install
+
+1. **New terminal first** — the most common miss. Close every terminal window, open a fresh one, re-run `claude --version`.
+2. **Git missing** (install scripts or later plugin steps may need it) → hand them off to `/dev-setup` for Git, then come back here.
+3. **Avoid npm** (`npm install -g @anthropic-ai/claude-code`) unless the native installer above failed — native is the supported path for non-technical teammates.
+4. Official docs if they want a second source: https://code.claude.com/docs/en/setup
+
+Once `claude --version` works, go back to **Step 1** — do not jump ahead to marketplace/update until `claude plugin list` has branched them correctly.
 
 ## Step 2 — updating an existing install (the common case)
 
