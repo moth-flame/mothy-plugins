@@ -46,40 +46,48 @@ claude plugin list
 ls ~/.claude/plugins/cache/mothy-marketplace/mothy/
 ```
 
-Then branch on what comes back:
+Then branch on what comes back. **Read the Scope column on the `mothy` line** — at Moth+Flame it is almost always `managed` (IT push), and that chooses which Step 2 update command you give:
 
-- **A list including `mothy` with Status enabled** → they have it. Go to Step 2 to update it.
+- **A list including `mothy` with Status enabled and Scope: `managed`** → they have it via IT. Go to Step 2 and use the **managed** update command (do **not** give the bare update — it fails with "not installed at scope user" and wastes a round trip).
+- **A list including `mothy` with Status enabled and Scope: `user` (or `project` / `local`)** → they have a hand install. Go to Step 2 and use the **user** (bare) update command.
+- **A list including `mothy` with Status enabled but Scope not shown / unclear** → ask them to paste the full `mothy` line (or the whole list) before Step 2. If you must guess at M+F, prefer managed.
 - **`mothy` listed as installed and enabled, but the `ls` says `No such file or directory`** → **dangling install record**: the registry entry survived but the files are gone. Go to Step 2b — `claude plugin update` cannot fix this.
-- **`failed to load` with `expected record` / `"path": ["hooks"]`** → known plugin bug through 0.24.0, not their install. Same Step 2; they need **0.24.1 or later**. Do not tell them to edit JSON.
+- **`failed to load` with `expected record` / `"path": ["hooks"]`** → known plugin bug through 0.24.0, not their install. Same Step 2 (pick managed vs user from Scope as above); they need **0.24.1 or later**. Do not tell them to edit JSON.
 - **`command not found: claude`** → they have Claude Desktop but not the command-line tool. Stop and say so plainly: this update cannot be done from the Desktop app's buttons today, and they need either the Claude Code CLI installed or someone with a terminal to do it for them. Do not send them into the Settings panel to hunt for an Update button — it is greyed out or lies, and that is a known bug.
 - **A list with no `mothy` line** → they have never installed it. Go to Step 3.
 - **They say `/plugin` (or any slash command) "isn't recognized"** → they typed a slash command into the app's chat box. Nothing in this coach is a slash command. Point them at the Terminal (Applications → Utilities → Terminal on a Mac) and re-send the `claude plugin list` line to paste there.
 
 ## Step 2 — updating an existing install (the common case)
 
-Two lines, **in this order**, given one at a time:
+Marketplace first, then the plugin update that matches the Scope from Step 1. Give **one line at a time**.
 
 ```
 claude plugin marketplace update mothy-marketplace
 ```
 
-Expect `✔ Successfully updated marketplace: mothy-marketplace`. Then:
+Expect `✔ Successfully updated marketplace: mothy-marketplace`. Then pick **exactly one** of the two plugin-update lines below — based on Scope from Step 1 — and give that as the next command:
 
-```
-claude plugin update mothy@mothy-marketplace
-```
-
-Expect `✔ Plugin "mothy" updated from <old> to <new>`. Then tell them to **quit Claude completely and reopen it** — the update does not apply to a running session.
-
-### If the second line says the plugin is in "managed scope"
-
-Full error: `Plugin "mothy@mothy-marketplace" is installed in managed scope, not user.` That means the plugin was pushed to them by Moth+Flame IT rather than installed by hand, which is normal and fine. Re-run just the second line with a scope flag:
+**Scope was `managed` (the normal Moth+Flame / IT-push path — use this first when Step 1 showed managed):**
 
 ```
 claude plugin update mothy@mothy-marketplace --scope managed
 ```
 
-**If they try to UNINSTALL and get that same error telling them to use `--scope managed`, ignore the advice in the error.** `uninstall --scope` accepts only `user`, `project`, `local` — the error names a flag that command does not take. `update --scope managed` is the one that works. Do not send them round that loop; it wastes their afternoon.
+**Scope was `user` (or `project` / `local` — hand install only):**
+
+```
+claude plugin update mothy@mothy-marketplace
+```
+
+Do **not** lead with the bare update when Scope was managed. Bare update looks for a user-scope install and fails with `Plugin "mothy" is not installed at scope user` — that is a wasted round trip, not a diagnostic step.
+
+Expect `✔ Plugin "mothy" updated from <old> to <new>`. Then tell them to **quit Claude completely and reopen it** — the update does not apply to a running session.
+
+### If you gave the wrong scope and the update errors
+
+Full error shapes you may still see if Scope was misread: `Plugin "mothy@mothy-marketplace" is installed in managed scope, not user.` or `Plugin "mothy" is not installed at scope user`. Re-run the plugin-update line with the **other** form above (managed ↔ bare). Do not restart from marketplace update unless they skipped it.
+
+**If they try to UNINSTALL and get an error telling them to use `--scope managed`, ignore the advice in the error.** `uninstall --scope` accepts only `user`, `project`, `local` — the error names a flag that command does not take. `update --scope managed` is the one that works. Do not send them round that loop; it wastes their afternoon.
 
 ### If it says it is already on the latest version, but they know it isn't
 

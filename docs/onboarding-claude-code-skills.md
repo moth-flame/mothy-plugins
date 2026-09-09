@@ -14,7 +14,24 @@ This page exists for the two cases where that is not available to you.
 
 ## If you just want the commands
 
-Open Terminal (Mac: Applications → Utilities → Terminal) or Git Bash (Windows). Paste these **in this order**:
+Open Terminal (Mac: Applications → Utilities → Terminal) or Git Bash (Windows).
+
+First check how the plugin is installed (look for **Scope** on the `mothy` line):
+
+```
+claude plugin list
+```
+
+At Moth+Flame, Scope is almost always **managed** (IT push). Use that path below. Bare update is only for a hand install (Scope: user / project / local).
+
+**Managed (normal M+F path)** — paste these **in this order**:
+
+```
+claude plugin marketplace update mothy-marketplace
+claude plugin update mothy@mothy-marketplace --scope managed
+```
+
+**User / hand install only** — paste these **in this order**:
 
 ```
 claude plugin marketplace update mothy-marketplace
@@ -23,13 +40,7 @@ claude plugin update mothy@mothy-marketplace
 
 Then **quit Claude completely and reopen it.**
 
-If the second line says the plugin is in *managed scope*, re-run just that line as:
-
-```
-claude plugin update mothy@mothy-marketplace --scope managed
-```
-
-That is the whole update procedure.
+Do not lead with the bare update on a managed install — it fails with `Plugin "mothy" is not installed at scope user` and wastes a step. That is the whole update procedure.
 
 ## First time only
 
