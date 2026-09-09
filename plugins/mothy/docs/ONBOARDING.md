@@ -54,40 +54,42 @@ Test it: *"use mothy, run whoami"* → it returns your email. If Mothy isn't in
 your connector list yet, message **Rich or Chris** to get added. (Full detail:
 the plugin [README](../README.md).)
 
-Why this matters for demo docs: `/video` posts to Slack `#product_and_customer_success`
-and appends to the Demo Videos sheet via the Mothy connector — no local Slack or
-Google secret. If the connector test above passes, those steps work.
+Why this matters for demo docs: **Path A** `/video` / `/article` run remotely on
+Agent37 via the Mothy connector (`video_make` / `article_make`) — no local
+ElevenLabs / Vimeo / Zoho keys. Slack DMs and the Demo Videos sheet also ride the
+connector. If the connector test above passes, Path A works.
 
 ---
 
-## 2. Place your credentials, then set up `/video`
+## 2. Default: Path A (no local video/article secrets)
 
-The demo skills need a handful of API credentials. **Credential resolution is
-env-var-first**, in this order:
+For almost every teammate: after `/connect`, run `/video` or `/article` and let
+Agent37 render. You do **not** need `ELEVENLABS_API_KEY`, `VIMEO_ACCESS_TOKEN`,
+`ZOHO_*`, ffmpeg, or Playwright on your laptop for Path A.
+
+Skip to §3 only if you need the **local Path B specialist** track (offline
+capture, iterating on beat scripts). That path uses `/video-setup` and the
+credentials in **[CREDENTIALS.md](./CREDENTIALS.md)**.
+
+### Path B only — place local credentials, then `/video-setup`
+
+Credential resolution is **env-var-first**:
 
 1. an **environment variable** (preferred), else
 2. the directory named by **`$MOTHY_STATE_DIR`**, else
 3. **`~/.mothy/.state/<file>.json`**.
 
-The canonical, always-current credential reference is **[CREDENTIALS.md](./CREDENTIALS.md)**
-(sibling of this file) — read it for the exact variable names, scopes, and where
-to get each key. The essentials you'll touch for a video → article run:
-
 | Credential | Env var | Fallback file | Notes |
 |---|---|---|---|
 | ElevenLabs (voiceover) | `ELEVENLABS_API_KEY` | `.env.local` | **Strip surrounding double-quotes** — the saved key is wrapped in `"`. |
 | Vimeo (publish) | `VIMEO_ACCESS_TOKEN` | `~/.mothy/.state/vimeo-creds.json` | Needs a **paid Vimeo plan + `upload` scope** (and `edit` to set metadata). |
-| Zoho Desk (article) | `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` | `~/.mothy/.state/zoho-creds.json` (tokens cache `zoho-tokens.json`) | Self-Client; scopes `Desk.articles.ALL,Desk.settings.ALL,Desk.basic.READ,Desk.search.READ`. |
+| Zoho Desk (specialist REST only) | `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` | `~/.mothy/.state/zoho-creds.json` | Not required for Path A `article_make` or Path B `zoho_kb_*`. |
 | Demo capture login | `COMMANDIQ_DEMO_CAPTURE_PASSWORD` | — | Never write the literal password into any file — read it from the env at runtime. |
 
-Slack and Google Sheets are **brokered through the Mothy connector** (step 1) —
-there is no local secret for them.
-
-**Set up `/video`.** With the credentials placed, do a one-time setup pass so the
-skill knows your environment is wired:
+**Set up Path B `/video`.** With the credentials placed:
 
 - Confirm `ELEVENLABS_API_KEY` resolves (env var or `.env.local`, quotes
-  stripped) — this is what blocks most first runs.
+  stripped) — this is what blocks most Path B first runs.
 - Confirm `VIMEO_ACCESS_TOKEN` resolves and is on a paid plan with `upload`
   scope. If you're not publishing to Vimeo yet, that's fine — the run will still
   Slack-DM you the local MP4 path and tell you Vimeo needs a paid token.

@@ -19,7 +19,7 @@ plugin's hook does not run, so the field could only ever read `true`.
 | field | value | why |
 | --- | --- | --- |
 | `claimed_email` | the `@mothandflamevr.com` address the Claude Code CLI is signed in with | the WHO. Self-asserted; see "Honest limits" |
-| `plugin_version` | the version of the plugin build that is running, e.g. `0.26.6` | the question being asked |
+| `plugin_version` | the version of the plugin build that is running, e.g. `0.27.0` | the question being asked |
 | `install_id` | a random UUID stored at `~/.claude/.mothy-plugin-install-id` | two Macs, one of them stale, is the exact case this exists for |
 | `freshness_state` | `current`, `stale` or `unknown` — the same verdict the local freshness warning renders | proves the local guard is working, or that it is blind |
 

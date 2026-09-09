@@ -4,18 +4,20 @@ Mothy ships as **two cooperating surfaces** that must never be confused:
 
 | Surface | Where it runs | Role | Repo |
 | --- | --- | --- | --- |
-| **mothy PLUGIN** | Local Claude Code CLI on your Mac | **Execution.** Drives the real app, real browser, real credentials, ffmpeg, and the network APIs. Produces artifacts. | `mothy-plugins/plugins/mothy` |
-| **mothy-mcp** | Vercel (remote, Cowork chat) | **Discovery only.** Serves playbook text and a skill index so a chat client can *find* a capability and point you at the local command. Runs nothing. | `mothy-mcp` |
+| **mothy PLUGIN** | Local Claude Code / Cursor on your machine | **Orchestration + local specialist tooling.** Slash commands + skills. Default `/video` + `/article` call mothy MCP remote renders; Path B keeps the local Playwright/ffmpeg/ElevenLabs capture rig for offline/specialist use. | `mothy-plugins/plugins/mothy` |
+| **mothy-mcp** | Vercel (remote) + **Agent37** for demo renders | **Discovery + remote execution for demo video/article.** Serves playbooks/indexes **and** queues `video_make` / `article_make` jobs that run on Agent37 (browser, ffmpeg, ElevenLabs, Vimeo, Zoho secrets stay there). | `mothy-mcp` |
 
-The hard rule that keeps these from drifting:
+The hard rule that keeps skill prose honest:
 
 > **One-directional canonicity.** The plugin `SKILL.md` is the single source of
-> truth for *how* a flow actually executes. The MCP playbook is a **discovery
-> summary** of that skill — it describes the capability and ends by pointing the
-> user at the local command (e.g. "run `/video` in Claude Code"). The playbook
-> never executes, never re-implements steps, and is allowed to lag/abbreviate.
-> When they disagree, the plugin `SKILL.md` wins. Edits flow plugin → playbook,
-> never the reverse.
+> truth for *how* a flow should be driven from the client. The MCP playbook
+> summarizes it. When they disagree, the plugin `SKILL.md` wins. Edits flow
+> plugin → playbook, never the reverse.
+>
+> **Execution split for video/article:** production Path A is **remote Agent37**
+> via `video_make` / `article_make`. Local Path B tooling under
+> `skills/video/tooling/` remains for specialist/offline capture — demoted, not
+> deleted. `agent37_exec` is admin diagnostics, not the user-facing default.
 
 ---
 
@@ -25,129 +27,96 @@ The hard rule that keeps these from drifting:
 flowchart TB
     user(["User"])
 
-    subgraph cowork["Cowork chat (remote)"]
-        direction TB
-        subgraph mcp["mothy-mcp · Vercel · DISCOVERY ONLY"]
-            direction TB
-            ls["list_skills<br/><i>skill index</i>"]
-            vpg["video_playbook_get"]
-            apg["article_playbook_get"]
-            pbv[["playbooks/video.md"]]
-            pba[["playbooks/article.md"]]
-            vpg --> pbv
-            apg --> pba
-            ls -. "names + invoke hints" .-> vpg
-            ls -. "names + invoke hints" .-> apg
-        end
-    end
-
-    subgraph mac["Local Claude Code CLI (your Mac) · EXECUTION"]
+    subgraph client["Claude Code / Cursor / Cowork"]
         direction TB
         subgraph cmds["commands/ (thin entrypoints)"]
             cvideo["video.md"]
             carticle["article.md"]
-            csetup["dev-setup / connect"]
+            csetup["dev-setup / connect / video-setup"]
         end
         subgraph skills["skills/ (CANONICAL SKILL.md)"]
             svideo["video/SKILL.md"]
             sarticle["article/SKILL.md"]
         end
-        subgraph tooling["skills/video/tooling/ (vendored under the video skill)"]
-            libs["vendored libs<br/>(Playwright/ffmpeg/ElevenLabs glue)"]
-            flows["flows/ config<br/>(beats, voice, runtime)"]
-            schemas["contract schemas"]
+        subgraph tooling["skills/video/tooling/ (Path B only)"]
+            libs["Playwright/ffmpeg/ElevenLabs glue"]
+            flows["flows/ config"]
         end
-        state[("scratchpad/.state<br/>artifacts<br/>(per-step screenshots,<br/>video, Vimeo link)")]
     end
 
-    extapps["Real running app<br/>+ Playwright browser"]
-    extapis["ElevenLabs · ffmpeg<br/>Vimeo · Zoho Desk"]
-    brokered["Slack + Google Sheets<br/>(brokered via Mothy MCP —<br/>no local secret)"]
+    subgraph mcp["mothy-mcp · Vercel"]
+        direction TB
+        vflows["video_flows / video_flow_kb"]
+        vmake["video_make"]
+        amake["article_make"]
+        rstat["render_status / render_approve / render_revise"]
+        zoho["zoho_kb_categories / zoho_kb_article_create"]
+        playbooks["playbooks + list_skills"]
+    end
 
-    user -->|"chat: 'make a demo video'"| mcp
-    mcp -->|"playbook text + 'run /video locally'"| user
-    user -->|"runs /video locally"| cvideo
+    agent37["Agent37 · browser + ffmpeg + secrets"]
+    vimeo["Vimeo"]
+    zohoDesk["Zoho Desk Draft"]
+    slack["Slack DM"]
 
+    user --> cvideo
+    user --> carticle
     cvideo --> svideo
     carticle --> sarticle
-    svideo --> tooling
-    sarticle --> tooling
-    svideo <--> state
-    sarticle <--> state
-    svideo --> extapps
-    svideo --> extapis
-    sarticle --> extapis
-    svideo --> brokered
-    sarticle --> brokered
 
-    svideo -. "is summarized by (plugin → playbook)" .-> pbv
-    sarticle -. "is summarized by (plugin → playbook)" .-> pba
+    svideo -->|"Path A DEFAULT"| vflows
+    vflows --> vmake
+    vmake --> agent37
+    agent37 --> rstat
+    agent37 --> vimeo
+    agent37 --> slack
 
-    classDef discovery fill:#eef,stroke:#88a,color:#113;
-    classDef exec fill:#efe,stroke:#7a7,color:#131;
-    classDef ext fill:#fee,stroke:#c88,color:#311;
-    class ls,vpg,apg,pbv,pba discovery;
-    class cvideo,carticle,csetup,svideo,sarticle,libs,flows,schemas exec;
-    class extapps,extapis,brokered ext;
+    sarticle -->|"Path A DEFAULT"| amake
+    amake --> agent37
+    agent37 --> zohoDesk
+    sarticle -->|"Path B hand-authored"| zoho
+
+    svideo -. "Path B specialist" .-> tooling
 ```
 
 ---
 
 ## Boundary map
 
-### Surface 1 — the mothy PLUGIN (local execution)
-
-Layered, each layer thinner than the one below it:
+### Surface 1 — the mothy PLUGIN (client orchestration)
 
 1. **`commands/{video,article,…}.md`** — thin entrypoints. Frontmatter
-   `description` + `argument-hint`; body just invokes the matching skill with
-   `$ARGUMENTS` and a one-line guardrail (e.g. "confirm scope before capturing",
-   "always a Draft, never auto-publish"). No logic lives here.
+   `description` + `argument-hint`; body invokes the matching skill. No logic.
 
-2. **`skills/{video,article,…}/SKILL.md`** — **canonical** orchestration. The
-   full playbook of how a flow executes: beats, capture loop, voiceover,
-   assembly, delivery, the credential resolution order, and the contract it
-   honors. This is the source of truth the MCP playbook merely summarizes.
+2. **`skills/{video,article,…}/SKILL.md`** — **canonical** orchestration.
+   Path A (remote) is default; Path B documents local capture for specialists.
 
-3. **`skills/video/tooling/`** — vendored implementation, scoped **under the
-   video skill** (a subdir, never a sibling skill dir, never `skills/_shared/`):
-   - vendored libs (Playwright / ffmpeg / ElevenLabs glue),
-   - `flows/` config (per-flow beat list, voice, target runtime, splash),
-   - contract schemas the skill validates against.
+3. **`skills/video/tooling/`** — vendored **Path B** implementation under the
+   video skill (never a sibling skill): Playwright/ffmpeg/ElevenLabs glue,
+   flow configs, schemas. `/article` Path B may reuse artifacts from a local
+   `/video` Path B run via scratchpad state.
 
-   The `article` skill reuses these via the same path — it consumes what a
-   `/video` run already captured rather than re-implementing capture.
+4. **`scratchpad/.state`** — Path B hand-off between local `/video` and
+   `/article`. Path A hand-off is `job_id` / `vimeo_id` via MCP.
 
-4. **`scratchpad/.state` artifacts** — the read/write substrate between steps
-   and between skills. `/video` writes per-step screenshots + the assembled
-   video + the Vimeo link; `/article` reads those same artifacts to build the
-   Zoho Desk Draft. State is the hand-off; neither skill re-derives the other's
-   output.
+### Surface 2 — mothy-mcp (+ Agent37 for renders)
 
-**External edges (local only):** the real running app + a real Playwright
-browser, plus ElevenLabs / ffmpeg / Vimeo / Zoho Desk over the network. These
-need a real machine and local credentials — they are why this surface cannot run
-in Cowork. **Slack and Google Sheets are the exception:** they are brokered
-through the Mothy MCP, so the plugin holds no Slack/Sheets secret locally.
+- **Discovery:** `list_skills`, `video_playbook_get`, `article_playbook_get`,
+  `video_flows`, `video_flow_kb`, `video_flow_request`, `commandiq_repo_intel`.
+- **Remote execution (Path A):** `video_make` / `article_make` → `job_id`;
+  poll `render_status`; QA with `render_approve` / `render_revise` when
+  `awaiting_qa`. Agent37 holds ElevenLabs / Vimeo / Zoho / demo-capture secrets.
+- **Hand-authored KB (article Path B):** `zoho_kb_categories` →
+  `zoho_kb_article_create` (Draft-only, server-side Zoho).
+- **Admin only:** `agent37_exec` allowlisted diagnostics — not the default
+  `/video` or `/article` path.
 
-### Surface 2 — mothy-mcp (Vercel, discovery only)
-
-- **`list_skills`** — enumerates available skills with names + `invoke` hints
-  (e.g. `video_playbook_get (then run /video locally)`). The chat's "what can
-  you do" entrypoint.
-- **`video_playbook_get` → `playbooks/video.md`** and
-  **`article_playbook_get` → `playbooks/article.md`** — serve the playbook text.
-  Each playbook leads with "this runs in your local Claude Code CLI — NOT here in
-  Cowork" and ends by pointing at the local `/video` · `/article` command.
-
-The MCP **serves text and nothing more.** It does not touch a browser, ffmpeg,
-or the local filesystem; it cannot produce a video or an article.
+Slack and Sheets remain MCP-brokered (no local Slack/Sheets secret).
 
 ---
 
 ## Demo-capture access note
 
-The capture path needs **no CommandIQ repo access.** `/video` logs into the
-deployed dev app as the demo-capture user and drives it through Playwright like
-any user would. No source checkout, no build of the target app — just a login
-and a browser. The demo data is anonymized and PII-safe.
+Path A needs **no local CommandIQ repo, no local ffmpeg, no local API keys.**
+Path B (when used) logs into the deployed dev app as the demo-capture user and
+drives it through Playwright; demo data is anonymized and PII-safe.

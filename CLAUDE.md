@@ -37,13 +37,13 @@ Mothy is two cooperating surfaces — never confuse them
 
 | Surface | Repo | Role |
 | --- | --- | --- |
-| **mothy PLUGIN (this repo)** | `mothy-plugins/plugins/mothy` | **Execution.** Runs locally in the Claude Code CLI — drives the real app/browser, real creds, ffmpeg, network APIs. Produces artifacts. |
-| **mothy-mcp** | separate repo (`mothy-mcp`, Vercel) | **Discovery only** for the demo flows — serves playbook text + a skill index so a chat client can *find* a capability and point at the local command. Runs nothing. |
+| **mothy PLUGIN (this repo)** | `mothy-plugins/plugins/mothy` | **Orchestration + Path B specialist tooling.** Slash commands/skills. Default `/video` + `/article` call mothy MCP remote renders; local Playwright/ffmpeg/ElevenLabs tooling stays for offline/specialist Path B. |
+| **mothy-mcp** | separate repo (`mothy-mcp`, Vercel) + **Agent37** | **Discovery + remote Path A execution** for demo video/article — `video_make` / `article_make` queue onto Agent37 (secrets stay there). Also serves playbooks/indexes. `agent37_exec` is admin diagnostics, not the user default. |
 
 > **One-directional canonicity.** The plugin `SKILL.md` is the single source of
-> truth for *how* a flow executes. The MCP playbook only **summarizes** it and
-> points the user at the local command. Edits flow **plugin → playbook, never
-> the reverse.** When they disagree, the plugin `SKILL.md` wins.
+> truth for *how* a flow is driven from the client. The MCP playbook only
+> **summarizes** it. Edits flow **plugin → playbook, never the reverse.** When
+> they disagree, the plugin `SKILL.md` wins.
 
 ## Two DELIVERY surfaces: the plugin and Organization Skills
 

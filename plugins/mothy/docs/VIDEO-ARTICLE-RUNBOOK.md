@@ -14,10 +14,14 @@ before the output is considered shippable. It has three parts:
 3. **Mock-Blind Walls** — the live integration failures that a mocked test run
    will never surface, and which the smoke MUST exercise against real services.
 
-> Scope note: the skills drive a **real running app** with Playwright, generate
-> voiceover with ElevenLabs, assemble with ffmpeg, and publish an article to a
-> Zoho Desk **Draft**. Nothing here publishes live. Credentials resolve
-> env-var-first; never write a literal secret into any file produced by a run.
+> Scope note: **Path A (DEFAULT)** runs remotely on Agent37 via mothy MCP
+> (`video_make` / `article_make`) — no local ElevenLabs / Vimeo / Zoho / ffmpeg.
+> **Path B** (this runbook's gates) drives a real running app with Playwright,
+> generates voiceover with ElevenLabs, assembles with ffmpeg, and publishes an
+> article to a Zoho Desk **Draft**. Nothing here publishes live. Credentials
+> resolve env-var-first; never write a literal secret into any file produced by
+> a run. Use this runbook when exercising the local specialist track or
+> verifying Agent37 output quality against the same gates.
 
 ---
 
