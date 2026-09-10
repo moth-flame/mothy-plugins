@@ -197,7 +197,7 @@ One MP4: 1920×1080, 30fps, h264/yuv420p + aac, continuous VO, all beats in orde
 **Vimeo upload approach (tus):**
 - `POST https://api.vimeo.com/me/videos` with a Bearer token from the `VIMEO_ACCESS_TOKEN` env var (env-var-first; see Credentials). Body: `{ upload: { approach: 'tus', size: <bytes> }, name: config.title, privacy: config.deliver.vimeo.privacy }`. Headers: `Authorization: Bearer <token>`, `Content-Type: application/json`, `Accept: application/vnd.vimeo.*+json;version=3.4`.
 - The response returns `upload.upload_link` (a tus endpoint) and `uri` (`/videos/<id>`). **Upload the bytes via tus** to `upload.upload_link`: `PATCH` with `Tus-Resumable: 1.0.0`, `Upload-Offset: 0`, `Content-Type: application/offset+octet-stream`, body = the MP4 bytes (resumable — re-`PATCH` from the server-reported `Upload-Offset` if interrupted).
-- The shareable link is `https://vimeo.com/<id>` (derive `<id>` from `uri`). Optionally `PATCH /videos/<id>` to set `name`/`description` after upload.
+- The **public** share link is `https://vimeo.com/<id>/<hash>` from `GET /videos/<id>` → `link` (unlisted hash required). Player embed is `https://player.vimeo.com/video/<id>?h=<hash>`. Never hand back `vimeo.com/manage/...` or `/videos/<id>/settings`. Optionally `PATCH /videos/<id>` to set `name`/`description` after upload.
 - **Requirements:** the token needs the `upload` scope (and `edit` if you set metadata after), Vimeo Pro, and Vimeo API uploads require a **paid Vimeo plan** — a free account 401/403s on `POST /me/videos`. If the upload can't run (no token / free plan), still complete the DM-the-path step and tell the user Vimeo needs a paid plan + an `upload`-scoped token.
 
 ## 0. Plan + confirm scope first

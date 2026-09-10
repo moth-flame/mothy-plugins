@@ -65,7 +65,7 @@ Use when the user is writing a help article that is **not** a demo-flow render (
 3. `mothy({action:"zoho_kb_article_create", params:{title, body_html, category_id, permission?}})`
    → Draft + editor link.
 
-`status` is not a parameter — pinned to `Draft` server-side. Executable HTML (script tags, inline `on*=`, iframes other than the allowed Vimeo player pattern the server accepts, `javascript:` URLs) is **refused, not stripped**. A Draft has **no public help-center URL** (`public_url: null`).
+`status` is not a parameter — pinned to `Draft` server-side. Executable HTML (script tags, inline `on*=`, `javascript:` URLs, and non-Vimeo iframes) is **refused, not stripped**. The **sole allowed iframe** is `https://player.vimeo.com/video/<id>?h=<hash>` (unlisted hash required). Share `https://vimeo.com/<id>/<hash>` — never `vimeo.com/manage/...`. A Draft has **no public help-center URL** (`public_url: null`).
 
 **Never publish through `zoho_kb_search` / `zoho_kb_article`** — those are the READ half.
 
@@ -164,6 +164,11 @@ Clean, semantic markup:
   </div>
   ```
   (Resolve the player URL via Vimeo oEmbed `https://vimeo.com/api/oembed.json?url=<vimeo-url>` if you only have the share link.) Put a short intro paragraph under the player ("Watch the walkthrough above, or follow the step-by-step instructions below.").
+
+  **Public vs editor URLs — do not mix these up.**
+  - **Public / customer watch:** `https://vimeo.com/<VIDEO_ID>/<HASH>` — anyone with the link; no Vimeo login. Use this in the article, Slack, and the Demo Videos sheet.
+  - **Player embed `src`:** `https://player.vimeo.com/video/<VIDEO_ID>?h=<HASH>`.
+  - **Never** `vimeo.com/manage/...`, `/videos/<id>/settings`, owner-only review links, or a watch URL stuffed into iframe `src` (including `?share=copy&fl=sv&fe=ci`). Those fail for customers and for KB readers. `zoho_kb_article_create` / `_update` allow the player iframe and refuse manage/staff URLs.
 
   **CRITICAL — the `?h=<HASH>` is MANDATORY for UNLISTED videos (2026-07-02 incident).** Every `/video` upload defaults to `config.deliver.vimeo.privacy.view=unlisted`, and an unlisted Vimeo video will NOT embed without its private hash in the player src — the iframe renders BLANK. The share link is `https://vimeo.com/<VIDEO_ID>/<HASH>`; the embed src is `https://player.vimeo.com/video/<VIDEO_ID>?h=<HASH>`. Get both from the Vimeo API `GET /videos/<id>` → `link` (has the hash) and `player_embed_url`. NEVER emit `player.vimeo.com/video/<id>` with no `?h=` for an unlisted video — that was the root cause of "the videos don't show." Also confirm the upload set `privacy.embed=public` (embeddable on any domain) — check via the API, not by assumption. (The `?h=` query keeps the src inside the publish gate's `https://player.vimeo.com/` prefix rule.)
   - Zoho bakes a `sandbox="allow-scripts allow-forms allow-same-origin allow-presentation ..."` onto the stored iframe. That sandbox INCLUDES `allow-scripts` + `allow-same-origin`, so a correctly-formed player (with the hash) DOES play inline inside Zoho — the sandbox is not the blocker; the missing hash was. Keep the `allow="autoplay; fullscreen; picture-in-picture"` attribute (Zoho may strip it, but basic click-to-play still works).
