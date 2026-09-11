@@ -35,7 +35,10 @@ the default user path.
 
 Path A steps (after the gate):
 1. Confirm the flow — `mothy({action:"video_flows"})` lists ready flows with plain-language
-   summaries. Suggest the matching id (e.g. `commandiq`); never invent a flow name.
+   summaries. Suggest the matching id; never invent a flow name. Technical / CommandMRO /
+   maintenance → `commandmro` (Path A ready against production CommandIQ, Command MRO org).
+   Do **not** pick `commandmro-local` (loopback / Mac Path B) or `commandmro-prod` (Mac
+   `01-*` beats). Learner sign-in reel → `commandiq`.
 2. If no ready flow matches: `video_flow_kb` → (gap only) `commandiq_repo_intel` →
    `video_flow_request` — see CONFIG below. Do not author local flow-config files in chat.
 3. Start the render — `mothy({action:"video_make", params:{flow}})` → `job_id`.
@@ -147,7 +150,13 @@ path that does not exist.
 USE for: a multi-beat narrated screen-capture video of a real app flow, delivered as one MP4 (remote Agent37 by default; local only when Path A is unavailable or explicitly requested).
 NOT for: a single screenshot, a silent GIF, editing/trimming an existing video the user supplies, or a slide deck (that's a different skill).
 
-If the user asks for the **CommandMRO technical demo flow** specifically → on Path A pick the matching ready flow from `video_flows`; on Path B use the bundled `commandmro` reference flow (the 9-beat flow documented in the reference appendix at the end), but FIRST confirm course + module(s) with the user, leading with a recommendation (see the appendix).
+If the user asks for the **CommandMRO technical demo flow** specifically → on Path A pick
+`commandmro` from `video_flows` (ready:true against `https://commandiq.mothandflamevr.com`,
+Command MRO org, L1–L6 beats: instructor heatmap → safety gates → assessment that teaches
+the AI → instructor-approved refresher → learner IMI → commander org view). Do not pick
+`commandmro-local` or `commandmro-prod`. On Path B use the bundled `commandmro` reference
+flow (the 9-beat flow documented in the reference appendix at the end), but FIRST confirm
+course + module(s) with the user, leading with a recommendation (see the appendix).
 
 ## CONFIG (per-flow) — Path B local configs + shared MCP corpus
 
@@ -378,7 +387,12 @@ DON'T:
 
 # Reference flow — CommandIQ (Vanguard demo orgs)
 
-> This appendix is the bundled `commandmro` reference flow. Its values are the documented examples the flow-agnostic engine above references by config key. The flow config is `tooling/flows/commandmro.config.json` (the default when no flow is named). The content below is preserved verbatim from the CommandMRO build for fidelity.
+> This appendix is the bundled **Path B** `commandmro` reference flow (DEV / Vanguard).
+> Path A does **not** use this appendix: remote Agent37 renders `commandmro` against
+> production CommandIQ (`https://commandiq.mothandflamevr.com`, org **Command MRO**,
+> captureProfile prod, L1–L6). The Path B flow config is `tooling/flows/commandmro.config.json`
+> (local default when Path A is unavailable). Values below are the documented Path B
+> examples the flow-agnostic engine references by config key.
 
 ## Demo-capture login (no CommandIQ repo access needed)
 
