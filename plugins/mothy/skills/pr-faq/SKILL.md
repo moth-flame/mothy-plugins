@@ -87,8 +87,11 @@ Draft the full document per `references/template.md`, then run every quality che
 
 **Deliverable**: a Google Doc (never an offline file), created via Mothy `docs_create_formatted`
 in the same Drive folder as prior PR/FAQs when findable, shared so ai@mothandflamevr.com can
-edit, titled `PR/FAQ: [Project Name]`. Include the provenance line (drafted with pr-faq
-skill, date, inputs; review status unreviewed). Return the Doc URL.
+edit, titled `PR/FAQ: [Project Name]`. Include a Review Checklist with the same roles as
+the PRD (Author/idea sponsor; Product (Rich Headley); Engineering (Rich will decide whom);
+Security reviewer when gov-facing), rendered as a Title | Name | Reviewed | Date Reviewed
+table. Include the provenance line (drafted with pr-faq skill, date, inputs; review status
+unreviewed). Return the Doc URL.
 
 Update the project's R&D Project Registry entry with the PR/FAQ link and stage (Proof). If
 no registry is configured yet, record the link in the Idea Dossier and offer to Slack Rich

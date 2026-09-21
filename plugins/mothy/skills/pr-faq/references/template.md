@@ -68,3 +68,12 @@ The exemplar's FAQ set is a historical snapshot, not a checklist. Derive, don't 
 
 Nothing in the document may be reused in external-facing material without stripping or
 replacing illustrative quotes and unverified claims.
+
+## Review Checklist
+
+Roles (same order as the PRD): Author/idea sponsor; Product (Rich Headley); Engineering
+(Rich will decide whom); Security reviewer (gov-facing, when applicable).
+
+In the Google Doc, render as a table: Title | Name | Reviewed | Date Reviewed — one row per
+role (Name prefilled for Product; Engineering/Security names filled when known).
+

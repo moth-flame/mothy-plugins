@@ -33,7 +33,7 @@ Synced: 2026-08-29 (wave 2). If this file and the Doc disagree, the Doc wins —
   recurring company meeting is Backlog Grooming, which is not part of R&D. Rich has
   visibility via the registry and the daily Mothy digest.
 - **Commit Review** — the one stage-gate meeting; replaces the old "Why"/"How"/Resource
-  Funding checkpoints. Attendees: sponsor, product, VP of Technology, leadership. Requires:
+  Funding checkpoints. Attendees: sponsor, Product (Rich Headley), Engineering (Rich will decide whom), leadership. Requires:
   PRD (decision record, incl. a self-measuring North Star metric), complexity map (relative
   Fibonacci, from zero), security/data screen (gov-facing), eval plan + dual metrics (AI
   features), finalized PR/FAQ. Output: greenlight + funding + roadmap slot (feeds the
@@ -48,8 +48,8 @@ Sketch (disposable, watermarked, synthetic data, internal-only, never customers)
 ## Who's who (roles)
 
 - Sponsor: any PM, department head, or account owner who stakes credibility on an idea
-- Funnel owner (registry policy, digest, sponsorship norms): Head of Product (Rich Headley)
-- Technical gate at Commit Review: VP of Technology
+- Funnel owner (registry policy, digest, sponsorship norms): Product (Rich Headley)
+- Technical gate at Commit Review: Engineering (Rich will decide whom)
 - Security reviewer: named per project for government-facing work
 
 ## Build mechanics (no sprints, no user stories, no JIRA)

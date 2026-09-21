@@ -64,5 +64,5 @@ Section order (exact):
 19. **FAQ**: the hard questions (persona/segment; why now; what might disappoint;
     integration; most contentious; security posture in plain terms; imported PR/FAQ
     questions). No minimum count; no filler.
-20. **Review Checklist** (roles): Author/idea sponsor; Peer PM; VP of Technology; Head of
-    Product; Security reviewer (gov-facing).
+20. **Review Checklist** (roles): Author/idea sponsor; Product (Rich Headley); Engineering
+    (Rich will decide whom); Security reviewer (gov-facing, when applicable).

@@ -115,9 +115,9 @@ Update the project's R&D Project Registry entry with the PRD link and stage (Com
 If no registry is configured yet, record it in the Idea Dossier and offer to Slack Rich the
 link.
 
-End with the chain: the PRD goes to Commit Review (product + VP of Technology + leadership —
-the one stage-gate meeting); after greenlight, the build is agent-orchestrated — offer to
-kick off /mothy:plan against this PRD.
+End with the chain: the PRD goes to Commit Review (Product (Rich Headley) + Engineering
+(Rich will decide whom) — the one stage-gate meeting); after greenlight, the build is
+agent-orchestrated — offer to kick off /mothy:plan against this PRD.
 
 ## Operate from the Product First Principles
 

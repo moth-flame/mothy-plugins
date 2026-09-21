@@ -32,8 +32,7 @@ for what each artifact is and which skill produces it.
    idea."
 3. **Answer in three parts:**
    - **You are here** — stage + evidence tier, with links to what was found.
-   - **Next step** — the single next artifact or checkpoint, who's involved (sponsor, peer
-     PM, VP of Technology, Head of Product), and what it requires.
+   - **Next step** — the single next artifact or checkpoint, who's involved (sponsor, Product (Rich Headley), Engineering (Rich will decide whom)), and what it requires.
    - **I can start it now** — offer the right skill: idea-intake if nothing exists, pr-faq
      if a dossier/prototype exists but no PR/FAQ, prd if the PR/FAQ is sponsored/greenlit.
 4. **Generic question** ("how does the process work?"): give the short stage-map answer and
