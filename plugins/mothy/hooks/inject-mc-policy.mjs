@@ -33,6 +33,7 @@ Rules for the widget:
 - Carry the context INTO the question. Assume they have not read the paragraph above it.
 - Each option states its CONSEQUENCE, not its name. Name the real trade, including against your own pick.
 - Plain language: write every question and option for a smart coworker outside your specialty — no unexplained shop jargon (PR, API, TDD, prod, rollback, and the like). Say what happens next in everyday words.
+- Outcome framing: before writing an option, ask: if he picks this without understanding the shop terms, what does he lose or gain in the real world? Write THAT. Any term a smart coworker outside the specialty would not know is either replaced with what it does, or explained in five words inline. If the trade cannot be stated without jargon, the question is not ready.
 - One decision per question. Up to four questions in one widget.
 - Hard safety checks (tests that must pass, confirmation codes) are controls, not options — never offer skipping them.
 

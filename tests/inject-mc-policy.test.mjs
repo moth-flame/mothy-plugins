@@ -58,6 +58,16 @@ test('source=compact is silent; startup and resume inject', () => {
   assert.match(run({ stdin: {} }), /AskUserQuestion/, 'missing source still injects');
 });
 
+test('outcome-framing bullet appears once, right after Plain language', () => {
+  const out = run({ stdin: { source: 'startup' } });
+  const matches = out.match(/lose or gain in the real world/g) || [];
+  assert.equal(matches.length, 1, 'phrase must appear exactly once');
+  const plainIdx = out.indexOf('Plain language:');
+  const outcomeIdx = out.indexOf('lose or gain in the real world');
+  assert.ok(plainIdx !== -1, 'Plain language bullet must exist');
+  assert.ok(outcomeIdx > plainIdx, 'outcome-framing bullet must appear after Plain language bullet');
+});
+
 test('policy block names the widget, the two-way-door rule, and (Recommended)', () => {
   assert.match(MC_POLICY_BLOCK, /AskUserQuestion/);
   assert.match(MC_POLICY_BLOCK, /\(Recommended\)/);
