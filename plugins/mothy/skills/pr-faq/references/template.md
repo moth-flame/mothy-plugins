@@ -11,6 +11,12 @@ Synced: 2026-08-29. If this copy and the Google Doc disagree, the Doc wins — r
 
 ## Press Release structure (≤ 1.5 pages)
 
+**Customer-facing only.** The press release is what an external reader sees: clear, concise,
+customer language. No internal jargon, staffing/phase/roadmap scaffolding, engine names,
+schemas, spike plans, license matrices, or "how we will build it" detail. Prefer ~1 page;
+never pad the release with material that belongs in the FAQ. When a draft bloated the
+release, trim it and move internals into the FAQ.
+
 1. **Headline**: [MOTH+FLAME] ANNOUNCES [SERVICE/PRODUCT] TO ENABLE [CUSTOMER SEGMENT] TO
    [BENEFIT STATEMENT]
 2. **Subtitle**: one sentence — who the customer is and the benefit they gain.
@@ -21,8 +27,10 @@ Synced: 2026-08-29. If this copy and the Google Doc disagree, the Doc wins — r
 4. **Customer Problems**: top 3-4 (max) problems / jobs-to-be-done, in the customer's own
    words where transcripts provide them. They must resonate with a customer reading them.
 5. **Solution heading + body**: a few words naming the solution at work; brief overview of
-   how it works; then address each listed problem — every problem maps to a mechanism
-   (numbered). Link the demo video instead of restating what it shows.
+   how it works in customer language; then address each listed problem — every problem maps
+   to a mechanism. Keep mechanism detail customer-clear in the release; put technical /
+   numbered internals in the FAQ when needed. Link the demo video instead of restating what
+   it shows.
 6. **Leader quote**: why the company tackled this and how the solution solves it, at a high
    level. AI-drafted quotes must be approved by the named leader before leaving Draft.
 7. **Additional Information / Getting started**: how easy it is to start; enough detail to
@@ -41,6 +49,10 @@ Synced: 2026-08-29. If this copy and the Google Doc disagree, the Doc wins — r
   "none yet" is an acceptable and meaningful answer (it means the doc is still hypothesis)
 
 ## FAQ set — DERIVED at drafting time, not copied
+
+**This is where jargon and technical / internal detail live** — mechanism depth, data
+handling, pricing/packaging, compliance, eval plans, phase/milestone sequencing, and
+anything that would only make sense to Moth+Flame engineering or product ops.
 
 Always present (the honesty trio):
 1. What might disappoint the customer?

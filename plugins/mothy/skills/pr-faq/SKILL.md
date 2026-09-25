@@ -2,7 +2,9 @@
 name: pr-faq
 description: >-
   Write an Amazon-style PR/FAQ (press release + FAQ) the Moth+Flame way —
-  working backward from the customer, drafted FROM prototype evidence.
+  working backward from the customer, drafted FROM prototype evidence. Press
+  release stays clear, concise, and customer-facing; jargon and technical
+  details stay in the FAQ.
   Triggered by:
     - "write a PR/FAQ", "PRFAQ", "press release for [idea]", "working
       backwards doc", "pitch this idea internally", "visioning doc"
@@ -22,6 +24,25 @@ to the user (see Interview Style below).
 
 Read `references/template.md` for the exact document structure before drafting, and
 `references/exemplar-predictive-readiness.md` for the house voice and quality bar.
+
+
+## Press release vs FAQ (hard split)
+
+**Press release (main body)** — clear, concise, and **customer-facing only**. A customer
+or external reader should finish it knowing what they get and why it matters. No internal
+jargon, no staffing/phase/roadmap scaffolding, no engine names, schemas, spike plans,
+license matrices, or "how we will build it" internals. Prefer short sentences and customer
+language. Aim ≤ ~1 page when possible (hard ceiling remains 1.5 pages); never pad the
+release with material that belongs in the FAQ.
+
+**FAQ (+ Prototype Evidence)** — where jargon, technical mechanism detail, internal
+sequencing, Phase / milestone plans, data-handling answers, pricing/packaging debates,
+compliance assumptions, eval plans, and sponsorship gates live. If a sentence would only
+make sense to Moth+Flame engineering or product ops, it goes here — not in the press
+release.
+
+When revising a draft that bloated the press release: **trim the release and move
+internals into the FAQ** rather than shortening by deleting substance.
 
 ## Phase 0 — Research before asking (do this FIRST, silently)
 
@@ -63,9 +84,14 @@ FAQ answers.
 Draft the full document per `references/template.md`, then run every quality check:
 
 - Headline matches the formula: MOTH+FLAME ANNOUNCES [X] TO ENABLE [SEGMENT] TO [BENEFIT].
-- Press release ≤ 1.5 pages; a customer could read it and know exactly what they get.
-- Every Customer Problem maps to a numbered mechanism in the solution section.
-- Zero unexplained jargon ("be clear, not clever").
+- Press release is clear, concise, and customer-facing (≤ 1.5 pages; prefer ~1 page). A
+  customer could read it and know exactly what they get — no internal jargon or build/ops
+  scaffolding in the release.
+- Every Customer Problem maps to a mechanism. Keep the release customer-clear: numbered
+  mechanism detail may live in the FAQ when putting it in the solution section would force
+  jargon into the press release.
+- Zero unexplained jargon in the press release ("be clear, not clever"). Technical and
+  internal detail belongs in the FAQ / Prototype Evidence.
 - ROI claims have live, numbered, cited sources; re-verify the arithmetic.
 - "What might disappoint" and "most contentious" answers are genuinely uncomfortable — if
   they read as humble-brags, redo them.
