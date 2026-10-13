@@ -50,6 +50,8 @@ Each row maps to a `mcp__mothy__mothy({ action: "<name>", params: {...} })`
 call. Read first (`docs_read` / `sheets_read` / `slides_get` /
 `docs_get_structure`) so you target the right ranges, then apply the edit.
 
+**Formal register (default):** before you finalize any text that goes into the document, sheet or deck you edit, run `mothy({action: "register_check", params: {text, audience: "formal"}})` (`"government"` for government readers; `"casual"` only when the person asks for it in this request) and rewrite until it returns zero errors. The rule lives in mothy-mcp `playbooks/formal-register.md`; do not restate it here.
+
 ## MANDATORY — Slides: post-edit geometry + visual verification
 
 **Not optional. Applies after EVERY `slides_batch_update` / `slides_replace_text`

@@ -188,6 +188,8 @@ Once the outline is locked, generate a `.md` file that contains the complete ins
 4. **Visual design** — reference to existing Moth+Flame brand treatment and source decks
 5. **Source priority** — which uploaded files to weight most heavily and how
 
+**Formal register (default):** before you finalize any text that goes into the deck file (slide text, bullets, quotes), run `mothy({action: "register_check", params: {text, audience: "formal"}})` (`"government"` for government readers; `"casual"` only when the person asks for it in this request) and rewrite until it returns zero errors. The rule lives in mothy-mcp `playbooks/formal-register.md`; do not restate it here.
+
 **Important formatting choice:** Write the file using markdown headers and bullets. NotebookLM accepts this cleanly and the team member can also read it directly.
 
 Save the file to `/mnt/user-data/outputs/` with a descriptive filename like `NotebookLM_Prompt_[Customer]_[Deck_Topic].md` and present it to the team member with the `present_files` tool.

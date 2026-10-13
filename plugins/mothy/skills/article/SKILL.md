@@ -151,6 +151,8 @@ Path B goes through MCP (`zoho_kb_*`) — you do not mint tokens locally. The RE
 
 **Permission enum (2026-07-08):** `ALL` = public; registered-only input `REGISTERED_USERS` stores as `REGISTEREDUSERS`; verify the STORED form.
 
+**Formal register (default):** before you finalize any text that goes into the article (titles and step instructions), run `mothy({action: "register_check", params: {text, audience: "formal"}})` (`"government"` for government readers; `"casual"` only when the person asks for it in this request) and rewrite until it returns zero errors. The rule lives in mothy-mcp `playbooks/formal-register.md`; do not restate it here.
+
 ## 4. Build the HTML body (Path B — Zoho-editor-compatible)
 
 Clean, semantic markup:

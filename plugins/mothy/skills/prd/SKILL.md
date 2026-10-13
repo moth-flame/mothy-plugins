@@ -105,6 +105,8 @@ real artifacts, produced by this skill during drafting:
 If the user has Figma or other design files, link them in Design Artifacts; otherwise
 generate first-pass artifacts and mark them as drafts for a designer to replace.
 
+**Formal register (default):** before you finalize any text that goes into the PRD, run `mothy({action: "register_check", params: {text, audience: "formal"}})` (`"government"` for government readers; `"casual"` only when the person asks for it in this request) and rewrite until it returns zero errors. The rule lives in mothy-mcp `playbooks/formal-register.md`; do not restate it here.
+
 **Deliverable**: a Google Doc via Mothy `docs_create_formatted`, shared so
 ai@mothandflamevr.com can edit, titled `PRD: [Project Name]`, following the template's
 section order exactly. Change-history row 1 credits the human author. Review Checklist

@@ -111,6 +111,8 @@ Draft the full document per `references/template.md`, then run every quality che
 - Prototype Evidence section is present; the human-attestation lines (real customer
   conversations; riskiest assumption) are left as visible prompts — NEVER AI-filled.
 
+**Formal register (default):** before you finalize any text that goes into the PR/FAQ, run `mothy({action: "register_check", params: {text, audience: "formal"}})` (`"government"` for government readers; `"casual"` only when the person asks for it in this request) and rewrite until it returns zero errors. The rule lives in mothy-mcp `playbooks/formal-register.md`; do not restate it here.
+
 **Deliverable**: a Google Doc (never an offline file), created via Mothy `docs_create_formatted`
 in the same Drive folder as prior PR/FAQs when findable, shared so ai@mothandflamevr.com can
 edit, titled `PR/FAQ: [Project Name]`. Include a Review Checklist with the same roles as
