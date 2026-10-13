@@ -15,6 +15,8 @@
  * because it is the whole reason the duplication is safe.
  */
 import { test } from 'node:test';
+// Scrubs inherited GIT_* (pre-push from a linked worktree) so fixtures never hit the real repo.
+import './git-env.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, mkdirSync, chmodSync } from 'node:fs';

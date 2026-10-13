@@ -24,6 +24,8 @@
 // scan. It is obviously fake and matches no real system.
 
 import { test } from 'node:test';
+// Scrubs inherited GIT_* (pre-push from a linked worktree) so fixtures never hit the real repo.
+import '../git-env.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, readFileSync, rmSync, chmodSync } from 'node:fs';
