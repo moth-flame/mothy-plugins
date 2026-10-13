@@ -654,6 +654,20 @@ until (
 On `iteration === 3` with unresolved findings: surface an escalation summary to
 the user. DO NOT commit.
 
+**Scaffolding findings are judged by severity and runnability, not by the round
+bound.** Split every unresolved finding by what it reviews:
+- **Implementation findings** (the shipped code path) — gated exactly as above:
+  three rounds, then escalate, DO NOT commit. Unchanged.
+- **Scaffolding findings** (test harnesses, fixtures, integration helpers) — weigh
+  each one by its severity AND whether the target environment can even execute
+  that scaffolding (e.g. a harness that only runs on one OS and is off the CI
+  gate, or a helper the deployed system never runs). Once the implementation has
+  had three clean reviews, an unresolved scaffolding finding does NOT block the
+  commit: escalate it to the user as an `AskUserQuestion` widget (see "Blocking
+  decisions go in a question widget"), stating the severity and the runnability
+  verdict, and let them decide whether it ships, gets fixed first, or gets a
+  follow-up unit.
+
 **Convergence check, not just a round bound (§4.5).** The real stop condition is
 `iteration < 3` AND a non-increasing finding count. Track the count per unit per
 round; a count that RISES round-over-round on the same unit escalates on the spot
