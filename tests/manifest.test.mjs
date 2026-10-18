@@ -388,6 +388,42 @@ test('video gates on prerequisites before spending its ~20.7k on-invoke budget',
   assert.match(md, /brew install ffmpeg/, 'must give a macOS ffmpeg install');
 });
 
+test('video offers the own-media path through mothy MCP, clips via Google Drive', () => {
+  // U11 (own-media video): a person turns their OWN photos and clips into a
+  // short narrated video. The client never uploads a clip: clips go in Drive
+  // and travel as links; only small stills are staged with media_stage_put,
+  // whose folder_id must ride along so the worker can trash it afterwards.
+  // The person confirms the attestation; nothing renders until they approve
+  // an exact script version.
+  const md = readFileSync(join(pluginRoot, 'skills', 'video', 'SKILL.md'), 'utf8');
+  const fm = md.slice(0, md.indexOf('---', 3));
+  assert.match(fm, /own\s+(photos|media)/i, 'frontmatter must trigger on own photos/clips');
+  // '\n## ' so the gate's '### Path C' / '### Path B' subsections do not match.
+  const at = md.indexOf('\n## Path C');
+  const pathB = md.indexOf('\n## Path B');
+  assert.ok(at > 0, 'video must have a Path C (own media) section');
+  assert.ok(pathB > 0 && at < pathB, 'Path C must come before the local Path B pipeline');
+  const gate = md.slice(md.indexOf('<!-- BEGIN prereq-gate'), md.indexOf('<!-- END prereq-gate -->'));
+  assert.match(gate, /own_media_make/, 'the gate must route own-media asks to Path C');
+  const c = md.slice(at, pathB);
+  assert.match(c, /own_media_make/);
+  assert.match(c, /drive_links/);
+  assert.match(c, /Google Drive/);
+  assert.match(c, /media_stage_put/);
+  assert.match(c, /staging_folder_id/);
+  assert.match(c, /action:"own_media_make", params:\{[^}]*staged_file_ids\?, staging_folder_id\?/, 'the call shape must carry staging_folder_id next to staged_file_ids');
+  assert.match(c, /folder_id/);
+  assert.match(c, /attested/);
+  assert.match(c, /render_script_approve/);
+  assert.match(c, /script_rev/);
+  assert.match(c, /render_script_update/);
+  assert.match(c, /render_cancel/);
+  assert.match(c, /render_delete/);
+  assert.match(c, /own_media_disabled/);
+  // Clips must never be base64'd into media_stage_put.
+  assert.match(c, /never .*clip.*media_stage_put|clips? (do not|never) go through media_stage_put/i);
+});
+
 test('dev-setup covers Windows AND macOS, and establishes the OS before instructing', () => {
   // Moth+Flame is a mixed Mac/Windows team. This skill shipped Mac-only (Homebrew,
   // Command+Space, ~/.zprofile) while describing itself as generic setup, so a Windows

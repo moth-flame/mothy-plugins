@@ -4,12 +4,14 @@ description: >-
   Produce a narrated product-demo VIDEO. DEFAULT Path A runs remotely on Agent37 via
   mothy MCP (video_flows → video_make → render_status; QA via render_approve /
   render_revise) — no local ELEVENLABS_API_KEY, VIMEO_ACCESS_TOKEN, ffmpeg, or
-  Playwright required. Path B is the specialist/offline local capture rig
+  Playwright required. Path C makes a short narrated video from the person's OWN
+  photos and clips, also remotely via mothy MCP (own_media_make; clips via Google
+  Drive links). Path B is the specialist/offline local capture rig
   (Playwright + ElevenLabs + ffmpeg + Vimeo) plus /video-setup. Use when the user
   says "/video", "make a demo video", "record a product demo", "capture a
-  walkthrough video", "make a sales/capability video of [flow]", or asks to
-  reproduce a live demo as a recorded asset. NOT for screenshots-only, GIFs, or
-  editing an existing video file.
+  walkthrough video", "make a sales/capability video of [flow]", "make a video
+  from my photos/clips", or asks to reproduce a live demo as a recorded asset.
+  NOT for screenshots-only, GIFs, or editing an existing video file.
 ---
 
 # video — narrated product-demo video producer
@@ -50,6 +52,13 @@ Path A steps (after the gate):
 
 **Path A does NOT require** `ELEVENLABS_API_KEY`, `VIMEO_ACCESS_TOKEN`, local `ffmpeg`,
 Playwright browsers, or `/video-setup`. Missing those must **not** abort Path A.
+
+### Path C — own photos and clips via mothy MCP
+
+When the person wants a video made from **their own photos and clips** (not a product
+flow), use Path C (`own_media_make`, section below). Same gate as Path A: the `mothy`
+connector is connected. No local keys, ffmpeg or Playwright. Path C has no Path B
+fallback.
 
 ### Path B — local specialist capture (only when Path A is unavailable)
 
@@ -114,6 +123,56 @@ confirm flow (video_flows) → video_make → poll render_status (or Slack DM)
   (or the DM). Optionally offer `/article` with `from_video_job` / `vimeo_id`.
 
 If Path A succeeds, **stop here** — do not also run the local Path B pipeline below.
+
+## Path C — own-media video (the person's own photos and clips)
+
+A short narrated video (30-300 s) made from media the person owns. It runs on Agent37
+like Path A; this session only calls mothy MCP actions. The person approves an exact
+script version before anything renders. The finished video is unlisted on Vimeo and its
+link comes by Slack DM.
+
+```
+gather media (Drive links | media_stage_put stills) → person confirms attestation
+  → own_media_make → render_status shows the script + script_rev
+  → render_script_approve | render_script_update → (render) → link by DM
+```
+
+1. **Gather the media.**
+   - **Clips, and any big file, go through Google Drive.** Ask the person to put them in
+     Drive and share the links: file links, or exactly ONE folder link on its own (Mothy
+     uses every supported file in that folder, in name order). Pass them as
+     `drive_links`. Never base64 a clip into media_stage_put; clips never go through
+     media_stage_put, and a folder link cannot be mixed with other media.
+   - **Small stills** (jpeg/png/webp/heic, up to 3 MB each) can be staged instead:
+     `mothy({action:"media_stage_put", params:{imageBase64, mimeType, name, draftId?}})`
+     per still, reusing one `draftId` for the whole set. Each call returns `file_id` and
+     `folder_id`. Keep every `file_id` (in order) and the `folder_id`.
+2. **Attestation, from the person.** Ask them to confirm, in their own words: no CUI, no
+   customer-restricted imagery, and they have the right to publish these. Pass
+   `attested: true` only after they confirm. Never assume it.
+3. **Start the job.**
+   `mothy({action:"own_media_make", params:{brief, drive_links?, staged_file_ids?, staging_folder_id?, script?, target_seconds?, clip_audio?, title?, attested:true}})`
+   - `staged_file_ids` (the `file_id` list) needs `staging_folder_id` (the `folder_id`
+     from media_stage_put). Mothy checks that folder is its own staging folder in the
+     person's Drive and moves it to the trash when the job ends.
+   - Omit `script` for an AI draft, or pass the person's own narration.
+   - `clip_audio`: `mute` (default) or `duck`.
+   - Refused `own_media_disabled` while the feature is switched off: say so plainly; do
+     not fall back to Path A or Path B.
+   - Any other refusal names what to fix (a bad link, too many files, a staging folder
+     Mothy cannot confirm). Relay it; do not retry blindly.
+4. **Script review.** Poll `mothy({action:"render_status", params:{job_id}})`, or tell the
+   person the script will arrive by Slack DM. When it is paused for the script, show the
+   script exactly as returned. On approval call
+   `render_script_approve {job_id, script_rev}` with the `script_rev` shown alongside it.
+   For edits call `render_script_update {job_id, script_rev, script}` with the full
+   changed script; that makes a NEW version that needs its own approval (a stale
+   `script_rev` is refused). Never invent a `script_rev`.
+5. **Stop or remove.** `render_cancel {job_id}` stops a job that has not been delivered.
+   `render_delete {job_id}` removes the job record and the media Mothy holds; a delivered
+   Vimeo video is not deleted by it (the reply says so).
+
+Do not use `render_approve` / `render_revise` for Path C; those are Path A's QA actions.
 
 ## Path B — local capture pipeline (specialist / offline only)
 
