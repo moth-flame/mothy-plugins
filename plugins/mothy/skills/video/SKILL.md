@@ -127,14 +127,17 @@ If Path A succeeds, **stop here** — do not also run the local Path B pipeline 
 ## Path C — own-media video (the person's own photos and clips)
 
 A short narrated video (30-300 s) made from media the person owns. It runs on Agent37
-like Path A; this session only calls mothy MCP actions. The person approves an exact
-script version before anything renders. The finished video is unlisted on Vimeo and its
-link comes by Slack DM.
+like Path A; this session only calls mothy MCP actions. The person's own script, passed
+exactly as they wrote it, renders with no approval step (Rich, 2026-10-18); any other
+script waits for the person to approve an exact version first. The finished video is
+unlisted on Vimeo and its link comes by Slack DM.
 
 ```
 gather media (Drive links | media_stage_put stills) → person confirms attestation
-  → own_media_make → render_status shows the script + script_rev
-  → render_script_approve | render_script_update → (render) → link by DM
+  → own_media_make
+      their script, unchanged + script_verbatim:true → (render) → link by DM
+      otherwise → render_status shows the script + script_rev
+        → render_script_approve | render_script_update → (render) → link by DM
 ```
 
 1. **Gather the media.**
@@ -151,18 +154,24 @@ gather media (Drive links | media_stage_put stills) → person confirms attestat
    customer-restricted imagery, and they have the right to publish these. Pass
    `attested: true` only after they confirm. Never assume it.
 3. **Start the job.**
-   `mothy({action:"own_media_make", params:{brief, drive_links?, staged_file_ids?, staging_folder_id?, script?, target_seconds?, clip_audio?, title?, attested:true}})`
+   `mothy({action:"own_media_make", params:{brief, drive_links?, staged_file_ids?, staging_folder_id?, script?, script_verbatim?, target_seconds?, clip_audio?, title?, attested:true}})`
    - `staged_file_ids` (the `file_id` list) needs `staging_folder_id` (the `folder_id`
      from media_stage_put). Mothy checks that folder is its own staging folder in the
      person's Drive and moves it to the trash when the job ends.
-   - Omit `script` for an AI draft, or pass the person's own narration.
+   - Omit `script` for an AI draft, or pass the person's own narration EXACTLY as they
+     wrote it, with `script_verbatim: true`. It then renders without an approval step
+     (it comes back for review only if a segment runs longer than its clip). If you
+     drafted, reworded, fixed, reformatted or added `[aNN]` markers to their text, leave
+     `script_verbatim` out: the script then waits for their approval.
    - `clip_audio`: `mute` (default) or `duck`.
    - Refused `own_media_disabled` while the feature is switched off: say so plainly; do
      not fall back to Path A or Path B.
    - Any other refusal names what to fix (a bad link, too many files, a staging folder
      Mothy cannot confirm). Relay it; do not retry blindly.
-4. **Script review.** Poll `mothy({action:"render_status", params:{job_id}})`, or tell the
-   person the script will arrive by Slack DM. When it is paused for the script, show the
+4. **Script review (only when it pauses).** With `script_verbatim: true` there is
+   normally nothing to approve: tell the person the link comes by Slack DM. Otherwise
+   poll `mothy({action:"render_status", params:{job_id}})`, or tell the person the script
+   will arrive by Slack DM. When it is paused for the script, show the
    script exactly as returned. On approval call
    `render_script_approve {job_id, script_rev}` with the `script_rev` shown alongside it.
    For edits call `render_script_update {job_id, script_rev, script}` with the full
