@@ -72,6 +72,8 @@ mothy:mc widget for enumerable choices, in Chat/Cowork ask inline. Human-only qu
 - Confirm the AI-proposed customer segment and ranked problem list (present drafts, let them
   rank/correct — never ask them to recite from memory what research already found)
 - Solution summary in one or two sentences if no prototype exists
+- The outcome: who, by role or name, would use this first, and what they could then do in
+  the real world that they can't do today (propose it from the evidence; they correct it)
 - Price-point assumptions for the ROI model
 
 Everything else is AI-drafted and human-reviewed: leader quote (draft in the leader's voice
@@ -84,6 +86,11 @@ FAQ answers.
 Draft the full document per `references/template.md`, then run every quality check:
 
 - Headline matches the formula: MOTH+FLAME ANNOUNCES [X] TO ENABLE [SEGMENT] TO [BENEFIT].
+- The release promises an outcome, not a feature. Delete the feature names and it should
+  still say what changes for the customer in the real world; if nothing is left, redo it.
+- Getting Started says how the customer reaches the first result without hunting for a
+  feature or sitting through training. Where the product has an agent or Mothy can do the
+  job, say so. Also say how they learn what's possible; a blank prompt box tells them nothing.
 - Press release is clear, concise, and customer-facing (≤ 1.5 pages; prefer ~1 page). A
   customer could read it and know exactly what they get — no internal jargon or build/ops
   scaffolding in the release.
@@ -98,9 +105,9 @@ Draft the full document per `references/template.md`, then run every quality che
 - Illustrative quote is marked `[ILLUSTRATIVE — fictional quote]` and attributed ONLY to an
   invented composite persona — never a real, named customer, unit, office, or
   plausible-sounding real name. Leader quote flagged for named-person approval.
-- **The FAQ is DERIVED, never copied from a canned list.** Three questions are always
+- **The FAQ is DERIVED, never copied from a canned list.** Four questions are always
   present because they keep the doc honest: what might disappoint the customer; what is the
-  most contentious aspect; why now. Every other question is chosen because THIS product will
+  most contentious aspect; why now; will anyone actually use this. Every other question is chosen because THIS product will
   actually face it — derive candidates from the segment (government → funding path/NDAA,
   data dependencies, internal-data-only fallback, channel partners), the product's nature
   (AI-powered → achievable accuracy and how we'll prove it, per the eval plan), the ROI
@@ -108,6 +115,11 @@ Draft the full document per `references/template.md`, then run every quality che
   the objections and questions that actually came up in customer conversations, sponsor
   reactions, and prototype demos. Old exemplar questions are candidates, not requirements;
   drop any that don't apply and add ones the evidence surfaces.
+- "Will anyone actually use this?" names who uses it first, how the result reaches them,
+  what would make us stop, and an outcome confidence (High: real people got the result
+  from the prototype or product in their own work. Medium: real people confirmed the pain
+  and reacted to a demo. Low: our own reasoning). Propose it from the evidence, never round
+  up, and have the human confirm it. Most ideas won't work as expected; say what we don't know.
 - Prototype Evidence section is present; the human-attestation lines (real customer
   conversations; riskiest assumption) are left as visible prompts — NEVER AI-filled.
 
@@ -142,7 +154,8 @@ drafting-for to red-teaming.
 Read `${CLAUDE_PLUGIN_ROOT}/docs/product-first-principles.md` (or the canonical Doc it
 links) and let it steer the drafting: envision the customer's problem and work backward;
 be clear, not clever; prototype the promise before you write the promise; product ideas
-from anywhere, product decisions from evidence.
+from anywhere, product decisions from evidence; outcomes over output; deliver the outcome,
+not the feature.
 
 ## Surface notes
 

@@ -1,7 +1,7 @@
 # PR/FAQ Template (operational copy)
 
 Source of truth: https://docs.google.com/document/d/16TyUb5L8hiv_EGdWeV-7O1Bi2xAELoU6owe2w_rWoAM/edit
-Synced: 2026-08-29. If this copy and the Google Doc disagree, the Doc wins — re-sync this file.
+Synced: 2026-11-06. If this copy and the Google Doc disagree, the Doc wins — re-sync this file.
 
 ## Header block
 
@@ -54,10 +54,12 @@ release, trim it and move internals into the FAQ.
 handling, pricing/packaging, compliance, eval plans, phase/milestone sequencing, and
 anything that would only make sense to Moth+Flame engineering or product ops.
 
-Always present (the honesty trio):
+Always present (the honesty four):
 1. What might disappoint the customer?
 2. What is the most contentious aspect of your product?
 3. Why is this a problem that needs to be solved right now?
+4. Will anyone actually use this? (Who uses it first, how does the result reach them, how
+   confident are we and why, and what would make us stop?)
 
 Everything else is chosen because THIS product will actually face the question. Candidate
 pool to weigh (include only what applies; add what the evidence surfaces):

@@ -42,6 +42,19 @@ Read `references/template.md` for the exact section order before drafting;
 
 ## Phase 1 — The questions that survive (human-only)
 
+- **Outcome case — draft from the evidence, human confirms, before any job story.** Most
+  new features never get used, so this comes first. Put it in Objectives:
+  - **Outcome:** who can do what in the real world that they can't do today, and what
+    result that produces. "A reminders feature" fails; "Program Owners catch a slipping date
+    before the customer does" passes.
+  - **Reach:** how the result gets to them where the work already happens, and how they
+    learn it's possible. If it depends on an announcement, tooltip, or training, log that
+    in Biggest Assumptions as a risk.
+  - **First users:** the named people who will use it first.
+  - **Proof:** what we'd observe if the outcome happened, more than once, in their own work.
+  - **Confidence:** High (real people got the result from the prototype or product in their
+    own work), Medium (real people confirmed the pain and reacted to a demo), or Low (our
+    own reasoning), with the reason. Never round up. Low doesn't stop the work; it shrinks it.
 - **Complexity map — co-build it, human confirms.** Size the PRD's milestones and major
   scope items in relative Fibonacci points AGAINST EACH OTHER within this project — no time
   units (agent-orchestrated work happens in hours and days; time isn't worth measuring), no
@@ -70,6 +83,9 @@ Draft per `references/template.md`, then run every quality check:
 
 - Problem statement: every slot filled; [downside] is a real tradeoff someone will dislike;
   [Unlike] names a real alternative or the status quo, not a strawman.
+- Outcome case complete in Objectives. Every Must job story traces to the outcome; one that
+  doesn't becomes a Should or goes to Features Out. At Low confidence, the first milestone
+  tests the riskiest assumption with the first users rather than building the full scope.
 - Every milestone has ≥1 Must job story; every Must story passes the developer-clarity test
   ("could I write a JIRA ticket from this alone?"). Situation-triggered format, not generic
   user stories.
@@ -80,17 +96,22 @@ Draft per `references/template.md`, then run every quality check:
   an event, counter, or query the product emits on its own. Prefer bespoke instrumentation
   built into the product over adopting a product-analytics suite; the PRD states exactly
   what emits the number and where it lands. A metrics table where every row needs a human
-  to go count something fails this check. AI features: dual metrics present and an eval-set
+  to go count something fails this check. **The North Star counts the job getting done, not
+  clicks, logins, or feature opens** (when an agent does the job for someone, that counts;
+  usage can sit beside it as a supporting number). AI features: dual metrics present and an eval-set
   line item exists in some milestone (the evals skill helps build it — nobody is expected
   to know how to write evals unaided).
+- If the product has an agent, or Mothy reaches it, the job stories cover how the agent can
+  use the capability and know when to. When software acts for someone, the scope covers
+  what it shows them it did and why, and how they correct or undo it.
 - Features Out is non-empty. Assumption ledger populated — assumptions the AI drafted are
   tagged Assumed with an owner, never silently presented as fact.
 - Prototype & Evidence section present; author-attestation lines (real conversations;
   riskiest assumption) left as visible prompts — NEVER AI-filled.
 - Security/Privacy: for government-facing work, prompt for ATO/impact-level implications and
   name a security reviewer; write "unknown + owner" rather than reassurance.
-- FAQ covers the hard questions (imported unanswered PR/FAQ questions included); no filler
-  to hit a count.
+- FAQ covers the hard questions (imported unanswered PR/FAQ questions included), always
+  including "Will anyone actually use this?"; no filler to hit a count.
 - Consistency sweep vs the PR/FAQ: same segment, same problems; call out any drift to the
   user explicitly rather than papering over it.
 
@@ -125,8 +146,9 @@ agent-orchestrated — offer to kick off /mothy:plan against this PRD.
 
 Read `${CLAUDE_PLUGIN_ROOT}/docs/product-first-principles.md` (or the canonical Doc it
 links) and let it steer the PRD: think big, start small; stubborn on vision, flexible on
-details; measure what we value; spend tokens before engineer-weeks; fish or cut bait (the
-fish-or-cut-bait review date goes in the PRD).
+details; outcomes over output; deliver the outcome, not the feature; measure what we value;
+spend tokens before engineer-weeks; fish or cut bait (the fish-or-cut-bait review date goes
+in the PRD, with the Proof it must show; no Proof by then means change it or kill it).
 
 ## Interview style + surface notes
 

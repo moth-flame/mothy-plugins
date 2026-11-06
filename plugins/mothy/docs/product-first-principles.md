@@ -2,7 +2,7 @@
 
 Canonical doc (the values source; if this copy disagrees, the Doc wins):
 https://docs.google.com/document/d/1MLDMJ9-F7iMJ3-a1KWP9mF_RTtz_1F8mzQHf7_52y0U/edit
-Synced: 2026-08-29.
+Synced: 2026-11-06.
 
 These steer every product-process skill (idea-intake, pr-faq, prd, evals,
 process-navigator) and the SDLC skills (plan, build, test, fix, mc). Quote them when they
@@ -24,6 +24,16 @@ decide something; don't recite them as decoration.
   document.
 - **Product ideas from anywhere; product decisions from evidence.** Anyone can frame a
   problem and prototype; nobody gets build resources without validated evidence.
+- **Outcomes over output.** Most new features never get used, and AI makes more of them
+  cheap. Before committing, say who will be able to do what in the real world that they
+  can't today, how we'll know it happened, how confident we are and why, and what we don't
+  know. If we can't name the outcome, we don't build the feature.
+- **Deliver the outcome, not the feature.** People want the job done, not a feature to
+  discover. Bring the result to where the work already happens; where we can, let the
+  product or its agent use the capability at the right moment. Still show people what's
+  possible. When software acts for people, they can see what it did and why, correct it,
+  and undo it. Measure whether the job got done, not clicks. If a feature only succeeds
+  through persuasion, it isn't finished.
 
 ## Planning and Execution
 
