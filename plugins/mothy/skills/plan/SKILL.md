@@ -11,6 +11,8 @@ metadata: { "openclaw": { "emoji": "🧠" } }
      a checked-out repo, where these conditions are already true; this block exists for
      teammates invoking the skill from the Claude desktop app. -->
 
+> **v-next (2026-11-06): the plan ships as an ANNOTATED REVIEW CANVAS.** Replaces the 2026-08-20 brutalist page. Every run publishes side-by-side boards with pink numbered badges and a what-changed sidebar, so a human can check intent without reading a long doc. Backend plans use diagrams and tables instead of mocks (Publishing the plan §). The `.md` handoff stays canonical for `/build`.
+
 ## §0.0 — Preflight: check the workspace, then explain (MANDATORY — runs before anything else)
 
 **Do this first — before reading files, before spawning any agent.** Many people reach
@@ -460,6 +462,59 @@ const PLAN_SCHEMA = {
 
 7. **Present the synthesis, not the raw role plans.** The user asked for the final plan, not the deliberation transcript. Quote a specific plan only when it had a detail worth surfacing verbatim.
 
+## Publishing the plan (MANDATORY — every run)
+
+A long plan document is a poor way for a person to check intent. Every plan is also delivered as an **annotated review artifact**: a page the human reads to confirm the plan means what they meant, before `/build` starts. Artifacts start private; the human chooses whether to share. A plan is not delivered until they have the link.
+
+**Order matters.** Publish AFTER the mandatory gates clear. The URL is what gets forwarded, so it must not point at a plan a critical finding is about to change.
+
+**The `.md` handoff file is still written and still canonical.** `/build` reads the file, not the page. The two must not drift: publish from the same synthesis, in the same turn, and update both when the plan changes.
+
+### What the artifact looks like
+
+Fixed, so every plan is recognizable on sight. A canvas of side-by-side boards, each about 1440 wide:
+
+- **Left: the thing itself.** A mock, sample conversation, diagram or table, labeled ILLUSTRATIVE when it uses sample data.
+- **Pink numbered badges** (`#D61F6E`, white bold numeral) placed on the exact spot each point is about.
+- **Right: a "WHAT CHANGED" sidebar** with one entry per badge: what it was, what it is now, and why that is better. A number means the same point on every board.
+
+Boards, in order:
+
+1. **Start here.** What was asked, in the asker's own words, with sources; the jobs the work must do as a table of job, where it came from, which step delivers it, and its state; what is deliberately left alone; and **what is still unknown, visually loudest**, grouped by what each unknown blocks. These are the reason the person is reading.
+2. **Before and after.** The current shape next to the proposed one, plus the checkpoints with story points.
+3. **One board per surface or major change**, chosen below, with the most important user job first.
+
+### Choose boards by what the plan changes
+
+| The plan changes | Show |
+|---|---|
+| UI | A mock of each changed screen, in the product's real design rules, showing only what changes |
+| Chat, agents, tools | Sample conversations, with the tool call or API request under each reply |
+| Data and schema | Tables, columns, types, who writes each, and sample rows before and after |
+| APIs and contracts | Request and response examples, error cases, who may call what |
+| Flows, jobs, pipelines | A flow diagram, what triggers each step, what happens on failure, how anyone would notice |
+| Permissions | A role-by-action table, including the refusals |
+| Migration or rollout | The ordered steps, what can be rolled back, and the point of no return |
+| LLM behavior | The eval fixtures, the thresholds, and which model serves the system under test |
+
+**A backend plan never skips the artifact.** With little or no new UI, the boards are diagrams and tables carrying the data a human must see and validate before `/build`: real row counts, measured checks, before-and-after samples, failure modes, and anything hard to undo. Show what they would approve, not how pretty it is.
+
+### Accuracy rules
+
+- **Read every source the requester gave before publishing**, including videos, transcripts and their own notes. A source you could not read goes on the Start here board as unread.
+- **Use the system's real vocabulary.** Status words, names, units, enums and fields are read from the code or spec. A mock with an invented status or screen teaches the reviewer the wrong product, and they will approve it.
+- **Sample data only.** No real customers, people or amounts; use placeholders like `[SAMPLE ACCOUNT]` and `[NAME]`.
+- **Say the true state.** Distinguish built, planned, waiting on someone, and unverified. Name the honest cost of a choice on the board that makes it.
+- **When a source disagrees with itself, show the disagreement** and say which side the boards follow.
+- **Plain language.** Explain every term the reader might not know. Story points only; never days, hours or weeks.
+- **A plan that changes re-publishes to the SAME URL.** Never mint a second link. Say what changed.
+
+### How to build it
+
+Use the Design (canvas) artifact type when the session has one: start it with the artifact tool's quickstart or type listing, read that type's own instructions, and write each board under `project/`. Build the page after the gates; the orchestrator checks every annotation against the plan, because this page is what the human approves.
+
+**With no artifact tool** (Codex, or any surface without one), write a single self-contained HTML file in the same layout next to the `.md` handoff, and give its path in place of a link. Never skip the review page because the tool is missing.
+
 ## Orchestration boilerplate (illustrative)
 
 > **If your harness is Claude Code, the shape below is the `Workflow` tool.** Call
@@ -562,6 +617,7 @@ state (§0.3) before doing anything else — the run is detached and resumable.
 - **Constrain each role.** Role focus = specific bullet questions, not "plan this."
 - **Conformance cross-check before synthesis** (Protocol 5.5). One agent, labeled `conformance:` and never `verify:`, reads the brief alongside every role plan and answers the question no isolated critic can — was the ask answered, and do the plans agree? It is given the requirements on purpose; that is its measuring stick. It never authors the plan and has no veto, but an unresolved `critical` finding blocks handing the plan to /build as final.
 - **You synthesize.** The final plan is your job, not a synthesis agent's — you have the context they don't.
+- **Publish the plan (Publishing the plan §).** Every run ends with an annotated review artifact (boards, pink numbered badges, what-changed sidebar), diagrams and tables when the plan is mostly backend, link handed to the human. Publish AFTER the gates clear, keep the `.md` handoff canonical for `/build`, and re-publish to the same URL on an update.
 - **Don't dump raw plans on the user.** The synthesis is the deliverable; mention specific dissents and gaps inline.
 - **Skip if the task is trivial.** A single file read, a factual question, a status check — answer inline. A squad is for design-level decisions.
 - **Include an eval gate when the plan touches an LLM call** (§0.6) — ground truth independent of the system under test, thresholds fixed before the run.
@@ -572,6 +628,11 @@ state (§0.3) before doing anything else — the run is detached and resumable.
 
 ## Anti-patterns
 
+- Ending a run with the plan only in scrollback or only in a markdown file: it is not delivered until the human can review the annotated artifact.
+- Publishing the artifact BEFORE the product/security gates clear, so the forwarded URL points at a plan about to change.
+- Skipping the artifact because a plan is backend-only. Show the diagrams and tables a human must validate.
+- A mock that invents statuses, screens or sample facts the real system does not have.
+- Minting a second artifact URL for an updated plan instead of re-publishing the same one.
 - Ten agents on a two-file change. Pick 3–4.
 - Sequential agents that can see each other's plans — the squad's whole value is independence.
 - The same focus block for every role (returns N identical generic plans).
