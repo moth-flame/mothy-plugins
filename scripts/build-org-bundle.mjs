@@ -127,9 +127,9 @@ export const ORG_BUNDLE = {
   ),
 
   plan: (src) => {
-    let out = cut(src, '<!-- BEGIN desktop-preflight', '> **Repo-agnostic and OS-agnostic.**',
+    let out = cut(src, '<!-- BEGIN desktop-preflight', '> **Adding a MANDATORY line',
                   PLAN_ORG_HEADER, 'plan');
-    out = cut(out, '## Orchestration boilerplate (illustrative)', '## Rules', '', 'plan');
+    out = cut(out, '## Orchestration boilerplate (illustrative)', '## Blocking decisions go in a question widget', '', 'plan');
     return cut(out, '**Preferred when the harness supports it:**', '**Fallback when it does not:**',
                PLAN_SEQUENTIAL, 'plan');
   },

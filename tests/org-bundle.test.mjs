@@ -79,7 +79,7 @@ test('plan: the org variant drops the repo preflight and the Workflow script', (
   assert.ok(!out.includes('Orchestration boilerplate'), 'its heading must go with it');
   // What makes /plan worth having must survive: independence, and the cross-check.
   assert.ok(out.includes("do not show a role the previous"), 'role independence is the whole point');
-  assert.match(out, /conformance/i, 'the pre-synthesis cross-check must survive');
+  assert.match(out, /one strong-tier reviewer/i, 'the plan reviewer must survive');
   assert.match(out, /sequentially in one\s+session/, 'the surviving orchestration shape is sequential');
 });
 

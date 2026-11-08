@@ -11,8 +11,6 @@ metadata: { "openclaw": { "emoji": "🧠" } }
      a checked-out repo, where these conditions are already true; this block exists for
      teammates invoking the skill from the Claude desktop app. -->
 
-> **v-next (2026-11-06): the plan ships as an ANNOTATED REVIEW CANVAS.** Replaces the 2026-08-20 brutalist page. Every run publishes side-by-side boards with pink numbered badges and a what-changed sidebar, so a human can check intent without reading a long doc. Backend plans use diagrams and tables instead of mocks (Publishing the plan §). The `.md` handoff stays canonical for `/build`.
-
 ## §0.0 — Preflight: check the workspace, then explain (MANDATORY — runs before anything else)
 
 **Do this first — before reading files, before spawning any agent.** Many people reach
@@ -42,607 +40,214 @@ terminal command they didn't ask for.
 
 <!-- END desktop-preflight -->
 
-> **Repo-agnostic and OS-agnostic.** Nothing here assumes a particular project
-> layout, operating system, absolute path, or role registry. It reads the repo's
-> own conventions **if present** and falls back to sensible generic defaults
-> otherwise. It works on Windows, macOS, and Linux, in a repo with no
-> `CLAUDE.md`, no `AGENTS.md`, and no `docs/` directory.
+> **Adding a MANDATORY line requires deleting or merging one.** Incident stories go in fix-logs,
+> not here. Eval rules: the `evals` skill.
 
-## §0.1 — Repo conventions: detect, do not assume
+## 0. Simplicity first
 
-**Use repo-relative paths only** — never absolute paths.
+Before any squad runs, answer in the brief:
+1. **What can we drop?** Question each requirement; each names the person it serves, or goes.
+2. **What already exists?** An existing tool, module, sheet + routine, or config that does it.
+   Triage: already satisfied > obsolete > config/doc change > smallest change at an existing
+   choke point > new module.
+3. **Trust the model.** Plan code only for people/safety rules (identity, who may see/do what,
+   confirmed origins, secrets, confirmation for destructive/bulk acts, audit). Where code can't
+   tell, the model decides or asks — no planned refusals.
+4. **No new gate, kill switch, budget or monitor** without a named incident and a named person.
+5. **Live first.** Every checkpoint ends with a live run on the real surface.
 
-Before building the brief, read these files **if present**: `CLAUDE.md`,
-`AGENTS.md`, `CONTRIBUTING.md`, `README.md`, and anything they point at. **Their
-rules OVERRIDE this skill wherever they conflict**, and their contents belong in
-the shared brief (§3) so the squad plans within the real constraints.
+## Sub-agent preamble and models
 
-**These files are OPTIONAL and their absence is normal.** A repo with none of
-them is not misconfigured — do not refuse, do not ask the user to create them,
-and do not import another project's conventions in their place.
-
-| Thing the plan needs | Detect from | Fallback when absent |
-|---|---|---|
-| **role map** | `AGENTS.md` if present | the plain roles in §2 |
-| **test / regression command** (so the plan's steps are runnable) | §0.2 detection order | ask the user, or state the plan assumes an unknown command |
-| **planning-artifact location** | a drafts/planning convention named in the repo's docs | keep the plan in the conversation, or write it wherever the user asks; never invent a doc tree the repo doesn't use |
-| **hard rules** (protected files, review gates, commit policy) | the repo's docs | secrets are protected; commit locally and ask before pushing |
-
-## §0.2 — Test command detection (never hardcode one in a plan)
-
-When a plan step says "run the tests," name the command the repo actually uses.
-Resolve it in this order and state which source you used:
-
-a. **An explicit command the user gave** — always wins.
-b. **The repo's own docs** — `CLAUDE.md`, `CONTRIBUTING.md`, `README.md`.
-c. **`package.json` `scripts`** — prefer `test:unit`, else `test`; package manager from the lockfile (`pnpm-lock.yaml` → `pnpm run`; `yarn.lock` → `yarn`; `package-lock.json`/none → `npm run`).
-d. **Language-native default:** `pytest` · `go test ./...` · `cargo test` · `dotnet test` · `bundle exec rspec` · `mvn test` / `gradle test` · `node --test`.
-e. **If none can be determined, ASK the user** rather than guessing.
-
-Only include a browser/E2E step if the repo actually has that setup (config +
-dependency + specs). If it doesn't, leave it out and say the plan has no browser
-verification step because the repo has no browser test setup.
-
-## §0.3 — Orchestration shape (preferred, with a plain fallback)
-
-**Preferred when the harness supports it:** run the squad as a detached
-background workflow — all role agents in parallel, resumable, surviving a
-dropped connection.
-
-**Fallback when it does not:** run the role passes **sequentially in one
-session**, each still planning *independently* — do not show a role the previous
-role's plan; that independence is the whole point. Every guarantee survives:
-independent lenses, constrained role focus, one synthesized plan at the end.
-**Nothing here requires a Workflow or Task tool.** What you lose is parallelism
-and resume-on-disconnect.
-
-**Durability is useful but optional, and degrades gracefully.** A /plan run
-spans three fragile moments: the squad fans out, the user answers clarifying
-questions, you synthesize.
-
-1. **Persist the run's state if the repo has a place for it.** If the repo uses a drafts/planning directory, write `<that-dir>/<YYYY-MM-DD>_<topic-slug>-plan.md` the moment the run starts. If it has no such convention, keep the same content in your working notes and offer to save it where the user wants. **Never create a doc tree the repo doesn't use, and never stall because a directory is absent.**
-2. **When kept, the handoff file holds:** the ask (brief, condensed) and any proposed approach being challenged; **locked decisions** — every answer the user has given, verbatim; verified current-state facts the squad was given (so a cold restart doesn't re-explore); a resume pointer if the harness gave you one; a "next step on resume" checklist.
-3. **Persist the user's answers the instant they arrive.** Clarifying answers are decisions; a transcript is not durable across a cold restart.
-4. **Resume contract.** Mid-run in the same session → resume the workflow if the harness offers it; completed agents return cached results. Cold restart → read the handoff file (or your notes), re-run or read the completed role plans, then synthesize.
-5. **On synthesis, replace the handoff content with the final plan** so it becomes a self-contained artifact `/build` can read directly. Keep the locked-decisions section.
-
-## §0.4 — Compact sub-agent output (recommended)
-
-Prepend the `CAVEMAN_ULTRA` preamble to sub-agent prompts. It applies to prose
-fields only: `tldr`, `reasoning`, `design`, `step`, `rationale`, `risk`,
-`mitigation`, `success_criteria` entries, `open_questions` entries,
-`priority_reorder`. Enums, file paths, numbers, and schema field names stay
-exact.
+Every `agent()` prompt starts with `CAVEMAN_ULTRA`:
 
 ```js
 const CAVEMAN_ULTRA = `
-RESPONSE MODE: ultra caveman. Drop articles (a/an/the), filler (just/really/basically/actually),
-pleasantries. Fragments OK. Short synonyms (big not extensive, fix not "implement").
-Technical terms exact. Code blocks unchanged. File paths exact. Enum values exact.
-CALIBRATION IS CONTENT, NOT FILLER. Never compress away uncertainty, a qualifier, a severity or
-a confidence level. "Might be exploitable" and "is exploitable" are different claims, and for a
-verifier or a security reviewer the qualifier IS the finding. Keep whichever one is true.
-NO LENGTH BUDGET. Caveman is about wording, never about how much you investigate or how many
-findings you report. Dropping a finding to be brief makes "cut for space" indistinguishable from
-"never found it" — measured, that is exactly how a shorter answer became a wrong answer.
-Pattern: [thing] [action] [reason]. [next].
-NOT: "I think the architecture should probably introduce a new abstraction layer that..."
-YES: "New abstraction layer. Decouple X from Y. Reason: Y churn high."
-`
+RESPONSE MODE: ultra caveman. Drop articles, filler, pleasantries. Fragments OK.
+Technical terms exact. Schema values exact.
+CALIBRATION IS CONTENT, NOT FILLER. Keep qualifiers, severity and confidence.
+Report only points that change the decision, worst first.
+Pattern: [thing] [action] [reason]. [next].`
 ```
 
-Your final synthesis (presented to the user) stays in normal prose — the
-compression is for sub-agent output only.
+**Model tiering (by role, not by name):** role agents on the cheap tier; architecture/security
+lenses and the plan reviewer on the strong tier (a different family from the drafters when
+available); synthesis is the orchestrator's. Don't assume a specific model exists.
 
-## §0.5 — Model tiering (by role and relative cost, not by name)
+## Orchestration shape
 
-Match the model to the job rather than to a fixed lineup:
+**Preferred when the harness supports it:** run the squad as a background workflow, all role
+agents in parallel.
 
-- **Cheap/fast worker tier** — the independent role plans. Many parallel calls, each well-scoped by its focus block.
-- **Strong/expensive critic tier** — the pre-synthesis conformance cross-check (Protocol 5.5), the synthesis and conflict resolution, and any adversarial review of the resulting plan. Few calls, highest leverage.
-
-The conformance cross-check is a distinct role from the synthesis, not an
-earlier draft of it: it maps where the role plans contradict each other and
-which brief requirements no role addressed, and it never authors the plan.
-Synthesis stays yours. Run it as its own agent even when only one tier is
-available.
-
-Do not assume a specific model is available. If only one tier exists, run
-everything there and say so.
-
-## §0.6 — LLM-call eval gate (when the plan includes an LLM call)
-
-If the plan introduces or changes a prompt, a worked example, a model/provider
-choice, or LLM call parameters, the plan MUST include an eval gate as a first-class
-step — not an afterthought:
-
-1. **An eval with fixtures and a runner**, built in the same work if the subsystem has none.
-2. **Ground truth INDEPENDENT of the system under test — the no-self-oracle prohibition.** Never grade a prompt's output using the same subsystem being changed. (Illustration: an eval that scores a redactor's output by re-running that same redactor stays green straight through a total redactor regression.)
-3. **Thresholds fixed BEFORE the run** — decided in the plan, not tuned afterwards to whatever the new output happens to score.
-4. **A recorded result** — metric values, fixture set, ground-truth source, threshold, pass/fail — as an acceptance criterion of the unit that ships it.
-
-### Model provenance — which pool pays, and for what
-
-An eval has three distinct roles, and they have OPPOSITE right answers. Conflating
-them is how a cheap eval quietly becomes a fake one.
-
-| Role | Which model | Which pool pays | Why |
-|---|---|---|---|
-| **System under test** | PRODUCTION parity — the model the shipped code actually calls | whatever production costs | Substituting changes *what you are measuring* |
-| **Judge / grader** | A subscription-backed model (one you already pay a flat rate for) — prefer a STRONG one | the flat-rate pool | Ground truth must be independent of the SUT. Stronger is *better* here; it is the structural opposite of a self-oracle |
-| **Fixture / adversarial-input authoring** | Subscription-backed | the flat-rate pool | No parity concern at all — red-teaming a prompt is exactly what a strong model is for |
-
-**Never spend metered per-call API budget on the judge or the fixtures.** That is
-what a flat-rate subscription is for. And where production is already a local or
-otherwise free model, the SUT costs nothing either — the cheapest option and the
-highest-parity option are the same option, so there is no tradeoff to optimize.
-
-**SUT substitution is DEFAULT-DENY.** If production parity genuinely cannot be
-had, record ONE line naming (a) the property being measured, (b) that the
-substitute is weaker-or-equal to production, and (c) that the property is not
-parity-locked. The *direction* is the whole argument: a STRONGER substitute
-biases optimistic — green tells you nothing about production — while a WEAKER
-substitute biases pessimistic, so a green there is *stronger* evidence than
-production would have given.
-
-**Parity-locked properties — never substitute, at any price.** These are
-properties of the model×prompt PAIR, not of the prompt:
-
-- prompt-injection resistance
-- instruction-following fidelity
-- output-format / JSON compliance
-- degeneracy and looping
-
-A stronger model masks the defect completely. A small model's rewrite degeneracy
-is invisible on a large one; an injection fixture that a frontier model shrugs
-off says nothing about the small model actually serving the call.
-
-**The agent RUNS the script; the agent is NOT the model.** An agent told to eval
-"on the subscription" will read the fixtures, reason about them itself, and
-report metrics *with the production code path never executed*. That is a
-FABRICATED eval, and in a report it is indistinguishable from a real one — the
-same decoupling as the self-oracle. Subscription inference may serve the judge
-and author the fixtures; the SUT always goes through the real production call
-path (real provider chain, real prompt, real runner script).
-
-**Report `sut_model`.** Every eval result records which model actually served the
-system under test. An eval that cannot say what served it is not evidence. This
-is also the check that catches a STALE-CODE run: an eval executed against a
-checkout or host that has not picked up the change grades the OLD behavior and
-reports a meaningless green.
-
-**Two tiers.** Subscription-backed judge in the inner loop (every commit, drift
-detection, fixture wiring). Parity SUT at the ship gate, and on ANY
-model/provider/parameter change.
-
-**Cost note — the model choice is not the biggest lever.** What the eval runs
-*against* usually dominates. An eval battery pointed at a live production agent
-carrying its full tool schema pays that schema on every single call; pointing it
-at a dedicated eval twin instead can save an order of magnitude more than any
-model swap. Give that twin EMPTY fallbacks, so an eval fails loud rather than
-silently switching models mid-battery.
-
-## §0.7 — Confirm the target is deployed before planning work to harden it
-
-A plan often exists to strengthen something that already exists: a patch, a guard,
-a scheduled job, a feature flag, a monitor, a migration. All of that work is worth
-exactly zero if the thing is not actually running where it is supposed to run.
-
-**Measured on a real multi-run build.** A sixteen-unit plan spent its whole budget
-hardening a security fence — writing guards, closing review findings, proving
-mutations across four rounds of rework — and only at the very end did triage of an
-unrelated alert reveal that the mechanism had been reverted by a platform upgrade
-and was not active in production at all. Every unit passed. Every gate cleared.
-Nothing in the planning phase had ever asked whether the target was live.
-
-**The rule.** If the plan's value depends on an existing mechanism being LIVE, the
-plan carries a **measured deployment check** for that mechanism BEFORE the units
-that harden it are scheduled — the command that was run, and what it returned.
-
-- **List the dependencies in the brief** (Protocol 3): every existing mechanism
-  this plan's value rests on. An empty list is a claim, and a checkable one.
-- **Measure, don't cite.** "The config declares it", "the installer applies it",
-  "the changelog says it shipped" are facts about a file. The question is what the
-  running system does — query the deployment, the process, the row, the endpoint.
-  What you checked has to be what decides.
-- **Unreadable is not deployed.** "Could not tell" and "checked, it is live" are
-  different answers. An unreadable check is an open question in the plan, never a
-  silent pass.
-- **An inert target re-orders the plan.** If the mechanism is not live, the first
-  unit is making it live; the hardening units come after. Guards on something
-  inert guard nothing, and the suite goes green regardless.
-- **Put the check in the plan artifact**, so whoever executes the plan can see the
-  target was live rather than assumed live.
-
-## §0.8 — Read version and provenance facts from the tree the change lives in
-
-**Measured on the same build.** A version-pinned constant was read from the main
-checkout and used to dismiss a review finding as a false positive. The unit's own
-working tree held a different value. The dismissal was a confident answer to the
-wrong question and had to be retracted in writing, after rework rounds had already
-been spent on it.
-
-**The rule.** When a plan, a synthesis or a review turns on a pinned version, a
-target commit, a config constant, a lockfile pin or any similar provenance fact,
-read it from the **working tree the change actually lives in** — the branch under
-review, the worktree a unit runs in, the checkout being deployed — and **name the
-tree you read**.
-
-- **Quote path and value together**, never the value alone. An unattributed value
-  is indistinguishable from a correct one.
-- **A fact from the wrong tree is not a weaker fact, it is a DIFFERENT fact.** It
-  arrives at full confidence pointing the wrong way, which is why it deserves a
-  line of ceremony rather than ordinary care.
-- **Parallel branches or worktrees make this the default failure**, not an edge
-  case: "the repo" is ambiguous the moment more than one tree is checked out, and
-  the open one wins by accident.
-- **If the deciding tree cannot be read from here, that is a finding** — not a
-  license to substitute the tree that can.
-
-## Blocking decisions go in a question widget (MANDATORY)
-
-When this skill is genuinely blocked on a decision that is the user's to make, ask
-it with `AskUserQuestion` — never as a sentence buried in a report, and never by
-stopping with prose and hoping it is read.
-
-The reason is mechanical, not stylistic. the user reads a feed that keeps scrolling:
-agent notifications, gate output, coord traffic, status lines. A question written
-in prose scrolls up and is gone, and the honest state — *I am stopped, waiting on
-you* — becomes invisible. They answer a question they never saw by not answering it,
-and the work sits. A question widget is a stop sign that does not scroll past.
-
-Assume they have NOT read the paragraph above the question. They probably have not.
-
-**When it fires in this skill:**
-
-- A scope or ambiguity call where different readings produce materially different
-  work, and proceeding under the wrong one wastes the build.
-- A true one-way door: no rollback, destroys the only copy of something, a
-  production cutover that cannot be reversed.
-- A `critical` finding from a gate or the conformance reviewer that the
-  orchestrator cannot resolve on the evidence available.
-- A premise the work rests on turning out to be false, where the right response
-  changes what gets built rather than how.
-
-**Rules for the question itself:**
-
-- **Recommendation FIRST, marked `(Recommended)`.** Having an opinion is the job.
-  An unranked menu pushes the analysis back onto him, which is the thing asking
-  was supposed to save.
-- **Carry the context INTO the question.** One sentence of what happened and why
-  the choice exists, restated inside the question text — never a reference to
-  something above it ("as noted", "per the finding", "given the above"). If the
-  question is unreadable on its own, it is unreadable.
-- **Each option states its CONSEQUENCE, not its name**, with numbers where a
-  consequence has a measured size.
-- **Say what is reversible.** "Clears on the next run" and "no rollback" are the
-  two facts that most change an answer.
-- **Name the real trade honestly, including against your own recommendation.**
-- **One decision per question.** Two questions beat one compound option list.
-  Four is the ceiling `AskUserQuestion` accepts.
-
-**The mirror failure is equally bad — do not manufacture stops.** A two-way door
-that the stated intent already covers is yours to decide: make the call,
-record the one-line rationale in the report, and keep going. Asking permission per
-item is how autonomy dies. The test is not "is this important," it is **"would I be
-stopping anyway?"** If yes, that stop belongs in a widget rather than in prose. If
-no, do not invent one.
-
-**A hard gate is not a decision and never becomes an option.** Red-green TDD, the
-pre-push suite, no `--no-verify`/`--amend`/`--force` around a failing hook, and any
-`confirmation_code` bind regardless of how a decision was surfaced or who made it.
-Request a confirmation code; never offer bypassing one as a choice.
+**Fallback when it does not:** run the role passes **sequentially in one
+session**, each still planning *independently* — do not show a role the previous
+role's plan; that independence is the whole point. Nothing here requires a Workflow tool.
 
 ## When to use
 
-The user says one of:
-- `/plan <topic>` (with topic args)
-- `/plan` alone — use the most recent substantive request in the conversation as the topic
-- "have a team plan this", "spawn a roundtable", "get a panel to think about X"
-
-For comprehensive design / architecture decisions where multiple role lenses
-each add signal. Not for simple lookups or single-step tasks.
+`/plan <topic>`, bare `/plan` (latest substantive request), "have a team plan this". Not for
+lookups or single-step tasks — answer inline.
 
 ## Protocol
 
-1. **Identify the task** — explicit args take priority; else use the most recent substantive user request in the conversation.
+1. **Identify the task** — args first, else the latest substantive request.
 
-2. **Pick roles.** **If the repo has an `AGENTS.md` (or equivalent) role map, use it — it overrides this list.** Otherwise use these plain roles and pick the 4–8 whose lens actually overlaps the task:
-   - **architecture** — component boundaries, API contracts, data flow, diagrams, ADRs
-   - **product** — jobs-to-be-done, user-visible failure modes today, priority ranking with a defended order
-   - **discovery** — external option comparison, matrices, a recommendation
-   - **design / UX** — how the change surfaces to the user, per-surface formatting, correction flows
-   - **security** — threat model, access control/isolation, PII, prompt injection, audit trail
-   - **build** — file-by-file change list, migration, rollout phasing, rollback
-   - **test** — a failing test per move (red-green), coverage/regression metrics, a manual runbook
-   - **docs** — when a knowledge artifact is the deliverable
-   - **release** — when shipping requires PR/release planning
+2. **Size the squad by stakes × uncertainty.** Default 2–3 agents: one merged **problem + options**
+   lens (product + discovery), one merged **design + change list** lens (architecture + build), plus
+   **test** when there is a test surface. Add separate strong-tier **security** / **architecture** only
+   when stakes or uncertainty are high. **Merge, don't spawn:** an agent that sees the same evidence
+   toward the same objective as one already spawned is merged.
 
-   Drop irrelevant roles: a 4-role squad of the right lenses beats a 10-role squad of bystanders.
+### Role vocabulary (use the repo's `AGENTS.md` role map if it has one)
 
-3. **Build a shared brief** — a single self-contained string that includes:
-   - Current state of the system / the problem
-   - Constraints from the repo's own docs (§0.1) and prior conversation
-   - Any proposed solution already on the table, with an explicit invitation to challenge it
-   - Hard rules that apply (protected files, review gates, red-green TDD, the detected test command from §0.2)
-   - "What to return" instructions
+| Role | Responsibility |
+|---|---|
+| product | JTBD, PRDs, priority stacks |
+| discovery | research → structured findings |
+| architecture | ADRs, diagrams, API contracts |
+| ux-designer | chat UX, message format, workflow review |
+| build | code to spec, file-by-file change list |
+| validate | pass/fail QA |
+| security | threat model, access, secrets |
+| test | live proof per checkpoint, failing tests for deterministic logic |
+| docs | README, changelogs, ADRs |
+| github | PRs, issues, releases |
 
-4. **Spawn one agent per role, all in parallel** (or sequentially and independently in the fallback), with structured output. Each agent gets `${BRIEF} + ## Your role: <name> + <role-specific focus>`. Suggested schema:
+3. **Build one self-contained brief:** current state, constraints (the repo's `CLAUDE.md` / `CONTRIBUTING.md` if present), any proposed
+   solution with an invitation to challenge it, the §0 answers, and what to return.
+
+4. **Confirm the target is deployed before planning work to harden it.** When the plan's value
+   rests on an existing mechanism being LIVE (a patch applied, a cron armed, a flag on, a consumer
+   reading), record the command run and what it returned, verbatim. Unreadable is not deployed. An
+   inert target makes "make it live (or prove it shouldn't be)" the first unit. Read version and
+   provenance facts from the tree the change lives in, and name that tree with the value.
+
+5. **Spawn all role agents in parallel** (see Orchestration shape) (they must not see each other's drafts).
+   Each gets `BRIEF + ## Your role: <name> + 6–10 role-specific questions`. Schema:
 
 ```js
-// Fibonacci complexity scale — NOT days.
-// Story points convey perceived complexity, which is the signal that survives
-// contact with an unfamiliar codebase; wall-clock estimates do not.
-//
-//  1  = trivial — one-line change, rename, copy tweak
-//  2  = simple — one file, well-understood, no design
-//  3  = small — multi-file but mechanical, clear pattern to follow
-//  5  = medium — multi-component, some unknowns, a few design choices
-//  8  = large — cross-cutting, real design work, new abstraction
-// 13  = very large — multi-system, hidden coupling, needs an ADR
-// 21  = epic — should be split before estimating
-const COMPLEXITY = [1, 2, 3, 5, 8, 13, 21]
-
+// Fibonacci story points — perceived complexity, never days/hours/weeks. 21 must be split.
 const PLAN_SCHEMA = {
   type: 'object',
-  required: ['role', 'tldr', 'agree_or_disagree', 'design', 'concrete_steps', 'risks', 'success_criteria', 'open_questions'],
+  required: ['role', 'tldr', 'stance', 'what_can_we_drop', 'already_exists', 'design', 'concrete_steps', 'success_criteria', 'open_questions'],
   properties: {
-    role: { type: 'string' },
-    tldr: { type: 'string' },
-    agree_or_disagree: {
-      type: 'object',
-      required: ['stance', 'reasoning'],
-      properties: {
-        stance: { type: 'string', enum: ['fully_agree', 'mostly_agree', 'partial_disagree', 'strongly_disagree'] },
-        reasoning: { type: 'string' }
-      }
-    },
+    role: { type: 'string' }, tldr: { type: 'string' },
+    stance: { enum: ['fully_agree', 'mostly_agree', 'partial_disagree', 'strongly_disagree'] },
+    what_can_we_drop: { type: 'array', items: { type: 'string' } },  // requirements/steps to delete, with why
+    already_exists: { type: 'array', items: { type: 'string' } },    // code/tools to reuse instead of build
     design: { type: 'string' },
-    concrete_steps: {
-      type: 'array',
-      items: {
-        type: 'object',
-        required: ['step', 'rationale', 'complexity'],
-        properties: {
-          step: { type: 'string' },
-          rationale: { type: 'string' },
-          touches_files: { type: 'array', items: { type: 'string' }, description: 'repo-relative paths only' },
-          complexity: { type: 'number', enum: [1, 2, 3, 5, 8, 13, 21] }
-        }
-      }
-    },
-    risks: {
-      type: 'array',
-      items: {
-        type: 'object',
-        required: ['risk', 'mitigation'],
-        properties: {
-          risk: { type: 'string' },
-          severity: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
-          mitigation: { type: 'string' }
-        }
-      }
-    },
-    success_criteria: { type: 'array', items: { type: 'string' } },
-    open_questions: { type: 'array', items: { type: 'string' } },
-    priority_reorder: { type: 'string' }
+    concrete_steps: { type: 'array', items: { type: 'object', required: ['step', 'complexity'],
+      properties: { step: { type: 'string' }, touches_files: { type: 'array', items: { type: 'string' } },
+        complexity: { enum: [1, 2, 3, 5, 8, 13, 21] } } } },
+    success_criteria: { type: 'array', items: { type: 'string' } },  // each provable live
+    open_questions: { type: 'array', items: { type: 'string' } }
   }
 }
 ```
 
-**Sizing rules for sub-agents (include verbatim in the brief):**
-- Use Fibonacci story points (1, 2, 3, 5, 8, 13, 21) — never days, hours, or weeks.
-- Estimate perceived complexity, not duration. If two steps both feel "medium" with comparable unknowns, both are 5. If one has more hidden coupling, bump it to 8.
-- Anything 21 must be split before reporting back.
-- Synthesis presents chunk totals as story-point sums, not time.
+6. **Write the handoff file as soon as the squad is dispatched,** in the repo's plans/drafts
+   convention (or the conversation if it has none; never create a directory it doesn't use): the
+   ask, facts, any resume handle, and a next-step-on-resume list. Append each clarification answer
+   as it arrives.
 
-4.5. **Persist the run state as soon as it starts (§0.3)** — the ask, the verified facts, any resume pointer, and a next-step-on-resume checklist. Append every clarification answer as it arrives. If the repo has no planning-doc convention, keep this in your notes rather than inventing a directory.
+7. **Synthesize in the main thread** (you hold the conversation; sub-agents don't). Produce:
+   consensus, conflicts + resolution, gaps, **what was dropped and why**, the final plan (ordered,
+   owner per step, files, how each checkpoint is proven live, story points per chunk and total),
+   the eval design when scope includes an LLM call (see below), and open questions for the user.
+   Overwrite the handoff file with it.
 
-5. **Write role-specific focus blocks** — each agent's `focus` is 6–10 specific bullet questions for that role. Don't let "architecture" plan everything; constrain each role to its domain, or you get N identical generic plans.
+8. **Plans over ~13 points get one strong-tier reviewer** of the synthesized plan: Q1 does it deliver
+   what was asked with the smallest first slice? Q2 are the people/safety rules covered? Add a
+   security reviewer only when the plan alters who can see or do what, touches secrets, or
+   writes/destroys data. At most 5 findings; high needs a concrete failure written out.
 
-5.5. **Cross-check the role plans against the brief — the conformance reviewer (MANDATORY).** When the plans come back and BEFORE you synthesize, run one agent whose only job is: *does this set of plans actually answer the brief, and do the plans agree with each other?*
+9. **Present the synthesis**, not the raw drafts.
 
-   - **A separate role from synthesis, and it never authors the plan.** It produces a map — nothing more. You synthesize, because you carry the conversation and it does not.
-   - **Label it `conformance:`** — never `verify:` / `review:` / `critique:`. Those labels belong to the isolated adversarial critics elsewhere in this toolchain (in /build and /fix a verifier is shown a diff, a rubric and types and deliberately nothing else, so that it cannot rationalize "the tests pass, must be fine"). This agent is the opposite by design: **it is handed the brief, because "was the ask answered" is a question you structurally cannot ask of a reviewer who never saw the ask.** Seeing the requirements is correct here, not a bias leak — and the labels stay distinct so nobody later "helpfully" feeds an isolated verifier the requirements too.
-   - **Strong/expensive critic tier** (§0.5) — reading N plans against a brief and finding the contradiction nobody stated is exactly where a weak model produces a summary instead of a cross-check.
-   - **Inputs:** the shared brief (requirements + constraints), every role plan in full, and any decisions already locked.
-   - **Output: a severity-ranked triage, worst first** — (a) where two roles propose incompatible things, naming both; (b) which brief requirements NO role addressed; (c) which plans are thin or hand-wave the hard part. Plus a short brief you read FIRST, so synthesis starts from a conflict map instead of you rebuilding it by hand from seven documents.
-   - **No veto, no authorship.** It hands you findings; you resolve them and own the final plan. But an unresolved `critical` finding — a requirement nothing covers, a contradiction nobody picked — blocks handing the plan to /build as final.
+## Checkpoint granularity — reviewable early
 
-   **What it is actually for: a squad that reports done without answering the ask.** Every role can return a competent, internally-consistent plan for the slice it was given and still, collectively, leave the actual request unaddressed — because no single role was ever asked to hold the whole brief. This agent is.
+A plan is done when it is REVIEWABLE EARLY, not when it is complete. (A 344-point plan whose
+first checkpoint spanned ~20 units turned a two-hour feature into a night and a day.)
 
-6. **Synthesize yourself** — when the role plans come back, YOU review them, starting from the conformance brief (5.5) rather than rebuilding the conflict map by hand. Do NOT delegate synthesis to another agent: you carry the full conversation context, the sub-agents do not. Produce:
-   - **Consensus** — what most roles agreed on
-   - **Conflicts** — where roles disagreed, and the resolution, with reasoning
-   - **Gaps** — what no role covered that still matters
-   - **Final plan** — ordered, concrete, ready to execute. Include who owns each step, repo-relative file paths, test names, the detected test command, per-chunk story-point complexity, and a per-task total
-   - **Open questions for the user** — decisions only they can make
+- **State a maximum unit count per checkpoint, and keep the FIRST one smallest.** A large first
+  checkpoint is a defect; if the design truly can't produce a thin first slice, defend it.
+- **Each checkpoint ends with a live run** a person can look at.
+- **Cap any acceptance matrix to boundaries the slice actually crosses.**
+- **Link the repo's test/gate cadence, never restate it.**
+- **Separate "required for the pilot" from "required before anything is reviewable."**
 
-   Present complexity in story points (1–21 Fibonacci). Never present days, hours, or weeks.
+## LLM-call evals
 
-7. **Present the synthesis, not the raw role plans.** The user asked for the final plan, not the deliberation transcript. Quote a specific plan only when it had a detail worth surfacing verbatim.
+A prompt or model change is proven by running it live on the real path. Design a fixture eval only
+for privacy, redaction, money, or a regression seen twice: ground truth, fixtures, and thresholds
+fixed at plan time. Rules: the `evals` skill.
 
-## Publishing the plan (MANDATORY — every run)
+### Model provenance
 
-A long plan document is a poor way for a person to check intent. Every plan is also delivered as an **annotated review artifact**: a page the human reads to confirm the plan means what they meant, before `/build` starts. Artifacts start private; the human chooses whether to share. A plan is not delivered until they have the link.
+- **No self-oracle:** ground truth is independent of the system under test.
+- The system under test runs on the production model and real call path.
+- **The agent RUNS the eval script; the agent is NOT the model.**
+- Thresholds are fixed before the run. No eval batteries aimed at the live agent.
 
-**Order matters.** Publish AFTER the mandatory gates clear. The URL is what gets forwarded, so it must not point at a plan a critical finding is about to change.
+## Publishing the plan
 
-**The `.md` handoff file is still written and still canonical.** `/build` reads the file, not the page. The two must not drift: publish from the same synthesis, in the same turn, and update both when the plan changes.
+Plans over ~13 points, or any plan that changes a user-visible surface, also ship as an
+**annotated review artifact** — published after the reviewer clears, link handed over. The `.md`
+handoff stays canonical for `/build`; both come from the same synthesis and re-publish to the SAME
+URL when the plan changes. Smaller plans: the `.md` plus a short chat summary.
 
-### What the artifact looks like
-
-Fixed, so every plan is recognizable on sight. A canvas of side-by-side boards, each about 1440 wide:
-
-- **Left: the thing itself.** A mock, sample conversation, diagram or table, labeled ILLUSTRATIVE when it uses sample data.
-- **Pink numbered badges** (`#D61F6E`, white bold numeral) placed on the exact spot each point is about.
-- **Right: a "WHAT CHANGED" sidebar** with one entry per badge: what it was, what it is now, and why that is better. A number means the same point on every board.
-
-Boards, in order:
-
-1. **Start here.** What was asked, in the asker's own words, with sources; the jobs the work must do as a table of job, where it came from, which step delivers it, and its state; what is deliberately left alone; and **what is still unknown, visually loudest**, grouped by what each unknown blocks. These are the reason the person is reading.
-2. **Before and after.** The current shape next to the proposed one, plus the checkpoints with story points.
-3. **One board per surface or major change**, chosen below, with the most important user job first.
+Layout: side-by-side boards (~1440 wide). Left, the thing itself (mock, sample conversation,
+diagram or table, labeled ILLUSTRATIVE when sample data); pink numbered badges (`#D61F6E`) on the
+exact spot each point is about; right, a "WHAT CHANGED" sidebar (was / now / why better). Boards:
+**Start here** (the ask in the asker's words, jobs → step table, what's left alone, what is still
+unknown — loudest), **Before and after** (with checkpoints and points), then one board per surface.
 
 ### Choose boards by what the plan changes
 
 | The plan changes | Show |
 |---|---|
-| UI | A mock of each changed screen, in the product's real design rules, showing only what changes |
-| Chat, agents, tools | Sample conversations, with the tool call or API request under each reply |
-| Data and schema | Tables, columns, types, who writes each, and sample rows before and after |
-| APIs and contracts | Request and response examples, error cases, who may call what |
-| Flows, jobs, pipelines | A flow diagram, what triggers each step, what happens on failure, how anyone would notice |
-| Permissions | A role-by-action table, including the refusals |
-| Migration or rollout | The ordered steps, what can be rolled back, and the point of no return |
-| LLM behavior | The eval fixtures, the thresholds, and which model serves the system under test |
+| UI | a mock of each changed screen in the product's real design, only what changes |
+| Chat, agents, tools | sample conversations with the tool call under each reply |
+| Data and schema | tables, columns, who writes each, sample rows before/after |
+| APIs | request/response examples, error cases, who may call what |
+| Flows, jobs | a flow diagram, triggers, failure behavior, how anyone would notice |
+| Permissions | a role-by-action table, including refusals |
+| Migration or rollout | ordered steps, what rolls back, the point of no return |
+| LLM behavior | the live proof, any eval fixtures and thresholds, which model serves |
 
-**A backend plan never skips the artifact.** With little or no new UI, the boards are diagrams and tables carrying the data a human must see and validate before `/build`: real row counts, measured checks, before-and-after samples, failure modes, and anything hard to undo. Show what they would approve, not how pretty it is.
-
-### Accuracy rules
-
-- **Read every source the requester gave before publishing**, including videos, transcripts and their own notes. A source you could not read goes on the Start here board as unread.
-- **Use the system's real vocabulary.** Status words, names, units, enums and fields are read from the code or spec. A mock with an invented status or screen teaches the reviewer the wrong product, and they will approve it.
-- **Sample data only.** No real customers, people or amounts; use placeholders like `[SAMPLE ACCOUNT]` and `[NAME]`.
-- **Say the true state.** Distinguish built, planned, waiting on someone, and unverified. Name the honest cost of a choice on the board that makes it.
-- **When a source disagrees with itself, show the disagreement** and say which side the boards follow.
-- **Plain language.** Explain every term the reader might not know. Story points only; never days, hours or weeks.
-- **A plan that changes re-publishes to the SAME URL.** Never mint a second link. Say what changed.
-
-### How to build it
-
-Use the Design (canvas) artifact type when the session has one: start it with the artifact tool's quickstart or type listing, read that type's own instructions, and write each board under `project/`. Build the page after the gates; the orchestrator checks every annotation against the plan, because this page is what the human approves.
-
-**With no artifact tool** (Codex, or any surface without one), write a single self-contained HTML file in the same layout next to the `.md` handoff, and give its path in place of a link. Never skip the review page because the tool is missing.
+Accuracy: read every source the requester gave (an unread one is listed as unread); use the
+system's real vocabulary; sample data only (`[SAMPLE ACCOUNT]`, `[NAME]`); say the true state
+(built / planned / waiting / unverified); plain language; story points only. Use the Design
+(canvas) artifact type when available; otherwise one self-contained HTML file next to the `.md`.
 
 ## Orchestration boilerplate (illustrative)
 
-> **If your harness is Claude Code, the shape below is the `Workflow` tool.** Call
-> it with a script whose `meta` declares `name`, `description` and a `phases` list
-> matching your `phase()` calls, then use `agent()` for a single pass,
-> `parallel()` when you genuinely need every result before the next stage, and
-> `pipeline()` — the default — when each item can flow through the stages
-> independently. Run it in the background and keep the returned `runId` and
-> `scriptPath`: that pair is what lets a dropped connection resume instead of
-> restart. **If you do not have that tool, nothing here is lost** — run the same
-> phases sequentially per §0.3. The phases are the method; the tool is one way to
-> execute them.
-
-Illustrative, not required — run the roles sequentially and independently if the
-harness has no parallel sub-agents (§0.3).
-
 ```js
-export const meta = {
-  name: 'squad-<short-topic-slug>',
-  description: 'Multi-role independent planning for <topic>',
-  phases: [{ title: 'Independent planning' }, { title: 'Conformance' }]
-}
-
-const BRIEF = `<full self-contained context — agents see no other conversation>`
-
-// §0.5 worker tier — ONE name, ONE place. A cheap/fast model for mechanical,
-// well-specified, high-volume calls. The critic agents below deliberately OMIT
-// this key and inherit the orchestrator's stronger model; that asymmetry is the
-// point (§0.5), not an oversight. If this environment offers no cheaper tier,
-// DELETE the key rather than guessing a name — a run must never fail over a
-// model that is not there.
-const WORKER_MODEL = 'sonnet'
-
-const ROLES = [
-  { name: 'architecture', focus: `...` },
-  { name: 'product', focus: `...` },
-  // ...
-]
-
-const PLAN_SCHEMA = { /* as above */ }
-
-phase('Independent planning')
-const plans = await parallel(ROLES.map(({ name, focus }) => () =>
-  agent(`${CAVEMAN_ULTRA}\n\n${BRIEF}\n\n## Your role: ${name}\n\n${focus}\n\nPlan independently.`, {
-    label: name,
-    model: WORKER_MODEL,   // independent role plan — worker tier (§0.5)
-    schema: PLAN_SCHEMA
-  })
-))
-
-// Pre-synthesis conformance cross-check (Protocol 5.5). Sees the brief ON PURPOSE —
-// "was the ask answered" needs the ask. Strong critic tier if available (§0.5).
-// Label `conformance:`, NEVER `verify:`. It maps conflicts; it never writes the plan.
-phase('Conformance')
-const conformance = await agent(
-  `${CAVEMAN_ULTRA}\n\nConformance reviewer — cross-check ALL role plans vs the brief and vs each other. ` +
-  `Do NOT write a plan.\n\nBRIEF:\n${BRIEF}\n\nROLE PLANS:\n${JSON.stringify(plans.filter(Boolean))}\n\n` +
-  `Emit worst-first: role-vs-role contradictions (name both), brief requirements NO role addressed, ` +
-  `plans that hand-wave the hard part. You have NO veto — this is a triage for the orchestrator.`,
-  {
-    label: 'conformance',
-    phase: 'Conformance',
-    schema: {
-      type: 'object',
-      required: ['conforms', 'orchestrator_brief', 'findings'],
-      properties: {
-        conforms: { type: 'boolean' },
-        orchestrator_brief: { type: 'string' },
-        findings: {
-          type: 'array',
-          items: {
-            type: 'object',
-            required: ['severity', 'kind', 'detail'],
-            properties: {
-              severity: { enum: ['critical', 'high', 'medium', 'low'] },
-              kind: { enum: ['contradiction', 'unaddressed_requirement', 'thin_plan'] },
-              roles: { type: 'array', items: { type: 'string' } },
-              detail: { type: 'string' }
-            }
-          }
-        }
-      }
-    }
-  }
-)
-
-return { plans: plans.filter(Boolean), conformance }
+const WORKER_MODEL = 'sonnet'   // cheap/fast tier — use whatever your harness offers
+const STRONG_MODEL = 'opus'    // strong tier for the reviewer
+const ROLES = [ /* { name, focus: ['6-10 role-specific questions'] } */ ]
+phase('Squad')
+const drafts = await parallel(ROLES.map(r => () => agent(
+  `${CAVEMAN_ULTRA}\n${BRIEF}\n## Your role: ${r.name}\n${r.focus.join('\n')}`,
+  { label: `role:${r.name}`, schema: PLAN_SCHEMA, model: WORKER_MODEL })))
+// Synthesis stays in the main thread. Plans over ~13 points: one reviewer on STRONG_MODEL.
 ```
 
-If the harness returns a run handle, capture it and persist it with the run
-state (§0.3) before doing anything else — the run is detached and resumable.
+## Blocking decisions go in a question widget
 
-## Rules
-
-- **Detect, don't assume** (§0.1). Read the repo's `CLAUDE.md` / `AGENTS.md` / `CONTRIBUTING.md` / `README.md` **if present**; their rules override this skill and belong in the brief. Their absence is normal.
-- **Repo-relative paths only.** No absolute paths, no OS assumptions — plans must be executable on Windows too.
-- **Never hardcode a test command** in a plan step (§0.2) — name the one this repo actually uses, or ask.
-- **Parallel, not sequential — and independent either way.** Role agents MUST not see each other's plans during the planning stage; independence is the entire value. In the sequential fallback, still withhold prior plans.
-- **Self-contained brief.** Sub-agents have no conversation history. The brief includes everything they need, or they will hallucinate it.
-- **Constrain each role.** Role focus = specific bullet questions, not "plan this."
-- **Conformance cross-check before synthesis** (Protocol 5.5). One agent, labeled `conformance:` and never `verify:`, reads the brief alongside every role plan and answers the question no isolated critic can — was the ask answered, and do the plans agree? It is given the requirements on purpose; that is its measuring stick. It never authors the plan and has no veto, but an unresolved `critical` finding blocks handing the plan to /build as final.
-- **You synthesize.** The final plan is your job, not a synthesis agent's — you have the context they don't.
-- **Publish the plan (Publishing the plan §).** Every run ends with an annotated review artifact (boards, pink numbered badges, what-changed sidebar), diagrams and tables when the plan is mostly backend, link handed to the human. Publish AFTER the gates clear, keep the `.md` handoff canonical for `/build`, and re-publish to the same URL on an update.
-- **Don't dump raw plans on the user.** The synthesis is the deliverable; mention specific dissents and gaps inline.
-- **Skip if the task is trivial.** A single file read, a factual question, a status check — answer inline. A squad is for design-level decisions.
-- **Include an eval gate when the plan touches an LLM call** (§0.6) — ground truth independent of the system under test, thresholds fixed before the run.
-- **Confirm the target is deployed (§0.7).** If the plan hardens something that already exists, record a measured deployment check for it — the command and its output — before scheduling the units that harden it. Unreadable is not deployed.
-- **Provenance from the tree that decides (§0.8).** Pinned versions, target commits and config constants are read from the working tree the change lives in, and the tree is named alongside the value.
-- **Plans stop at planning.** A plan does not commit, push, deploy, or migrate. Execution is /build, and it commits locally and asks before pushing.
-- **Durable where possible (§0.3).** Persist the ask, the decisions, and the resume pointer; degrade to working notes when the repo has no planning-doc convention.
+The user's decisions go in `AskUserQuestion`: recommendation first `(Recommended)`, context in the
+question, each option's consequence and reversibility, one decision each. Two-way doors their intent
+covers are yours — decide, log one line.
 
 ## Anti-patterns
 
-- Ending a run with the plan only in scrollback or only in a markdown file: it is not delivered until the human can review the annotated artifact.
-- Publishing the artifact BEFORE the product/security gates clear, so the forwarded URL points at a plan about to change.
-- Skipping the artifact because a plan is backend-only. Show the diagrams and tables a human must validate.
-- A mock that invents statuses, screens or sample facts the real system does not have.
-- Minting a second artifact URL for an updated plan instead of re-publishing the same one.
-- Ten agents on a two-file change. Pick 3–4.
-- Sequential agents that can see each other's plans — the squad's whole value is independence.
-- The same focus block for every role (returns N identical generic plans).
-- Letting a synthesizer agent write the final plan — it doesn't have the conversation.
-- Showing the user a raw JSON dump of every role plan.
-- **Naming a test command the repo doesn't have**, so every downstream step is unrunnable.
-- **Writing the plan into a directory convention the repo doesn't use**, or refusing to plan because `CLAUDE.md` / `AGENTS.md` is missing.
-- Estimating in days/hours/weeks instead of complexity points.
-- Scheduling units to harden a mechanism nobody confirmed is running — guards land, gates clear, the suite goes green, and none of it is in force.
-- Reading a pinned version or config constant from whichever checkout happens to be open, then deciding a finding on it.
+- 11 agents on a 2-file change; two agents reading the same evidence toward the same objective.
+- A plan that adds gates, switches, budgets or refusals with no named incident and person.
+- A plan with no "what we dropped" and no "what already exists".
+- A first checkpoint of many units with no live proof until the end.
+- Scheduling units to harden a mechanism nobody confirmed is running.
+- Reading a pinned version from whichever checkout is open.
+- Letting a synthesizer agent write the final plan; dumping raw drafts on the user.
+- A mock that invents statuses or screens the real system doesn't have.
+
 ## Operate from the Product First Principles
 
 When planning product work, read `${CLAUDE_PLUGIN_ROOT}/docs/product-first-principles.md`
